@@ -51,10 +51,13 @@ async function newGame(){
   Combat.syncMinions();
   await UI.say([
     `${DEX[sp].n}! ` + ['A gentle soul with thorns.', 'Warm hands, warmer temper.', 'It has already started crying. That means it likes you.'][pick],
-    'THE WAY OF IT: move with WASD or arrows. Z swings your staff (or talks, when facing someone). X hurls a HEX BOLT (costs Soul). C throws a soul jar.',
-    'Wild grims roam MURKWOOD past the south gate. Weaken one below a third — a jar mark appears — then C binds it to your pack. Your pack fights with you, forever.',
-    'Restore my... YOUR manor, and the valley\'s DEED BOOK opens: land for sale everywhere, each home with its own power. Off you go, little necromancer.',
+    'Stay close and I will teach you everything, step by step. Follow the glowing objective at the top of the screen.',
   ], 'Witch Morwen');
+  if (await UI.confirm('Play the guided tutorial? (Recommended for your first time.)')){
+    Tutorial.begin();
+  } else {
+    await UI.say('As you like, dear. Press ☰ (or Esc) any time for your menu. Off you go.', 'Witch Morwen');
+  }
   Systems.save();
 }
 
@@ -78,6 +81,8 @@ function continueGame(){
 
 // ---------- boot ----------
 SPR.init();
+initTouch();
+fitScreen();
 
 $('btn-new').onclick = async () => {
   if (Systems.load() && !(await UI.confirm('Start over? Your old save will be erased.'))) return;
@@ -103,6 +108,7 @@ function loop(t){
   lastT = t;
   if (G.started){
     World.update(dt);
+    Tutorial.update();
     saveT += dt;
     if (saveT > 30){ saveT = 0; Systems.save(); }
   }

@@ -168,6 +168,7 @@ const Combat = (() => {
   function killEnemy(e){
     ents = ents.filter(x => x !== e);
     poof(e.x, e.y, '#5a4a7a');
+    G.kills = (G.kills || 0) + 1;
     // xp
     const baseXp = Math.floor(DEX[e.sp].xp * e.lvl / 12) + 2;
     let mult = 1 + gearAffix('xp')/100 + (G.manor.restored.study ? 0.15 : 0);

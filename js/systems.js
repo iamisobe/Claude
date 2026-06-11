@@ -222,6 +222,7 @@ const Systems = (() => {
   async function sleep(){
     if (!(await UI.confirm('Sleep until morning? You and your grims will fully recover.'))) return;
     G.time.day++; G.time.min = 6 * 60;
+    G.flags.slept = true;
     healAll();
     save();
     await UI.say(`You dream of ${['endless staircases','a fish with your name','singing pumpkins','the moon, blinking','a polite skeleton'][rnd(5)]}... and wake refreshed. (${UI.moonPhase() === 2 ? 'The moon is FULL tonight.' : UI.moonPhase() === 0 ? 'The moon is NEW tonight.' : 'Day ' + G.time.day})`);
@@ -439,6 +440,7 @@ const Systems = (() => {
         continue;
       }
       if (c === 1){
+        if (G.tut) G.tut.arenaSeen = true;
         const rows = [];
         for (let i = 3; i >= -2; i--){
           const r = rank + i;
@@ -644,10 +646,18 @@ const Systems = (() => {
 
   // ---------- pause menu ----------
   async function pauseMenu(){
+    if (G.tut) G.tut.menuOpened = true;
     for(;;){
-      const c = await UI.choice(['Pack', 'Satchel', 'Gear', 'Skills', 'Deeds', 'Grimdex', 'Save', 'Close']);
-      if (c === -1 || c === 7) return;
-      if (c === 0){
+      const base = ['Pack', 'Satchel', 'Gear', 'Skills', 'Deeds', 'Grimdex', 'Save'];
+      const opts = Tutorial.active() ? base.concat(['Skip tutorial', 'Close']) : base.concat(['Close']);
+      const c = await UI.choice(opts);
+      const pick = c < 0 ? 'Close' : opts[c];
+      if (pick === 'Close') return;
+      if (pick === 'Skip tutorial'){
+        if (await UI.confirm('Skip the rest of the tutorial? Morwen will stop guiding you.')) Tutorial.skip();
+        continue;
+      }
+      if (pick === 'Pack'){
         for(;;){
           const i = await UI.party('YOUR PACK');
           if (i < 0) break;
@@ -659,7 +669,7 @@ const Systems = (() => {
             if (nm && nm.trim()) g.nick = nm.trim().slice(0, 14);
           }
         }
-      } else if (c === 1){
+      } else if (pick === 'Satchel'){
         for(;;){
           const id = await UI.pickItem(null);
           if (!id) break;
@@ -696,16 +706,16 @@ const Systems = (() => {
           else if (it.k === 'rod') UI.toast('Face water and press Z to fish.');
           else UI.toast(it.d || '...');
         }
-      } else if (c === 2) await gearMenu();
-      else if (c === 3){
+      } else if (pick === 'Gear') await gearMenu();
+      else if (pick === 'Skills'){
         await UI.panelList('SKILLS', Object.entries(SKILLS).map(([k, s]) => {
           const lvl = skillLvl(k), xp = G.skills[k] || 0;
           const cur = skillXpFor(lvl), next = skillXpFor(lvl + 1);
           const pct = Math.min(100, Math.round((xp - cur) / (next - cur) * 100));
           return { html:`<b style="color:${s.col}">${s.icon} ${s.n} — Lv.${lvl}</b> <span class="dim">${xp - cur}/${next - cur} xp (${pct}%)</span><br><span class="dim">${s.d}</span>` };
         }), { footer:'Skills have NO level cap. Everything scales forever.' });
-      } else if (c === 4) await deedsMenu();
-      else if (c === 5){
+      } else if (pick === 'Deeds') await deedsMenu();
+      else if (pick === 'Grimdex'){
         const keys = Object.keys(DEX);
         const caught = keys.filter(k => G.dex[k] === 2).length;
         await UI.panelList(`GRIMDEX — ${caught}/${keys.length} bound`, keys.map(k => {
@@ -714,7 +724,7 @@ const Systems = (() => {
           return { spr: SPR.creature(k),
             html:`<b>${DEX[k].n}</b> ${st === 2 ? '<span class="tag" style="color:#6dd86d">BOUND</span>' : '<span class="tag">seen</span>'}<br><span class="dim">${st === 2 ? DEX[k].desc : '...'}</span>` };
         }), { footer:'Bind them all... if the valley lets you.' });
-      } else if (c === 6){
+      } else if (pick === 'Save'){
         save();
         UI.toast('Game saved.');
       }

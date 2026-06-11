@@ -1,0 +1,162 @@
+// ============================================================
+// GRIMVALE — tutorial: a full, guided, objective-driven course
+// through EVERY system: moving, fighting, binding, menus,
+// fishing, farming, resting, restoring, brewing, delving,
+// the arena, and gear. Watches live game state to advance.
+// ============================================================
+'use strict';
+
+const Tutorial = (() => {
+
+  // Each step: {icon, obj, intro? (Morwen, once), gift? (run once), check}
+  const STEPS = [
+    { icon:'✦', obj:'Move with the D-pad (or WASD / arrow keys).',
+      check: () => Tutorial._moved >= 5 },
+
+    { icon:'↓', obj:'Head SOUTH down the path, through the gate, into Murkwood.',
+      intro:['See the bars at the bottom-left? Red is your LIFE, purple your SOUL.',
+        'Now walk SOUTH, dear — all the way down the path and through the gate. Murkwood waits.'],
+      check: () => World.map === 'woods' },
+
+    { icon:'⚔', obj:'Defeat a wild grim! A (or Z) swings your staff, ✦ BOLT (X) hurls a hex.',
+      intro:['Murkwood crawls with wild grims, and they will not wait to be asked.',
+        'Get close and tap A to swing your staff. Or tap BOLT — it spends Soul, which returns on its own.',
+        'Your own grim fights at your side. Go on — put one DOWN.'],
+      check: () => (G.kills || 0) >= 1 },
+
+    { icon:'◍', obj:'Weaken a grim until the ◍ mark appears, then tap JAR (C) to bind it!',
+      intro:['Now, the necromancer\'s true art. Hurt a wild grim until it is nearly spent —',
+        'a glowing ◍ mark appears above it. THEN tap JAR to hurl a soul jar.',
+        'A bound grim rises and fights for you, forever. Your pack grows with your Necromancy skill. Catch one!'],
+      check: () => (G.party.length + G.storage.length) >= 2 },
+
+    { icon:'☰', obj:'Open the MENU (☰ or Esc) and have a look around, then close it.',
+      intro:['Splendid! That grim is yours now.',
+        'Tap ☰ (top-right) any time: your PACK, your SATCHEL, your GEAR, your SKILLS, the DEED BOOK, and the Grimdex.',
+        'Every skill climbs FOREVER — Necromancy, Fishing, Farming, Brewing, Delving. Open the menu and look around.'],
+      check: () => !!G.tut.menuOpened },
+
+    { icon:'🎣', obj:'Find Fisher Eli by the town lake (east side) and talk to him (A).',
+      intro:['Time you learned to fish. Head back NORTH to town.',
+        'Fisher Eli idles by the lake on the east side. Talk to him — face him and press A. He owes me a favour.'],
+      check: () => !!G.flags.metEli },
+
+    { icon:'🎣', obj:'Face the water and press A to cast. Stop the bobber in the green!',
+      intro:['Rod in hand! Stand at the water\'s edge, FACE the water, and press A to cast.',
+        'When the gold bobber crosses the GREEN band, press A again. Whatever bites comes up ANGRY — land it, fight it, jar it if you fancy it.',
+        'Some fish bite only at night; the rarest only under a new or full moon.'],
+      check: () => (G.skills.fishing || 0) > 0 },
+
+    { icon:'☘', obj:'Plant a seed: walk to the farm plots (north-east, by the fence) and press A at a soil plot.',
+      intro:['Now for the garden. You carry two BLOODBERRY SEEDS in your satchel.',
+        'The farm plots sit north-east of town, inside the little fence — the gap is on the south side.',
+        'FACE a dark soil plot, press A, and choose a seed. Press A again later to WATER it — water makes everything grow half again as fast.'],
+      check: () => Object.keys(G.farm).length > 0 },
+
+    { icon:'🌙', obj:'Go home to Hollow Manor (north door) and SLEEP in your bed.',
+      intro:['Crops take time. Luckily, time is yours to spend.',
+        'Your manor is the big house at the TOP of town. Inside, face the bed and press A to sleep.',
+        'Sleeping heals everything, passes the day, and turns the MOON — new moon, waxing, full, waning. The moon decides what bites.'],
+      check: () => !!G.flags.slept },
+
+    { icon:'⛏', obj:'Restore the KITCHEN: face the rubble in the west doorway and press A.',
+      gift: () => { G.gold += 800; Inv.add('plank', 3); Inv.add('stone', 2);
+        UI.toast('Morwen slips you 800⛁, 3 planks and 2 stones.'); },
+      intro:['This manor is your first home — and your training in the builder\'s art.',
+        'I have tucked some coin and materials into your satchel. Face the RUBBLE blocking the west doorway and press A to restore the KITCHEN.',
+        'Each restored wing grants a power. All four restored... and the valley\'s DEED BOOK opens. But one wing will do for now.'],
+      check: () => !!G.manor.restored.kitchen },
+
+    { icon:'⚗', obj:'Brew at the cauldron: 3 bloodberries make a Grave Tonic.',
+      gift: () => { if (Inv.count('bloodberry') < 3) Inv.add('bloodberry', 3 - Inv.count('bloodberry'));
+        UI.toast('Morwen tops up your bloodberries.'); },
+      intro:['A kitchen! Now we cook. Well — BREW.',
+        'The cauldron bubbles in your new kitchen. Face it, press A, and brew a GRAVE TONIC from three bloodberries.',
+        'Your farm grows the ingredients; your Brewing skill unlocks finer recipes — baits, elixirs, even Second Breath.'],
+      check: () => (G.skills.brewing || 0) > 0 },
+
+    { icon:'🕳', obj:'Descend into the catacombs (the dark hole in the graveyard) and reach floor B2.',
+      intro:['You are ready for the dark, I think.',
+        'In the graveyard, west of town, a HOLE waits. Press A at its edge to climb down.',
+        'Fight to the DOWN STAIRS and descend to floor B2. Chests hide gold and gear. The floors go down FOREVER — every fifth one is guarded.',
+        'If it goes badly, use a GRAVE RUNE from your satchel to escape. The Gravedigger gives them to those who ask.'],
+      check: () => (G.cata.maxFloor || 0) >= 2 },
+
+    { icon:'⚔', obj:'Equip a piece of gear from the GEAR menu (☰ → Gear).',
+      gift: () => { G.gear.bag.push(rollGear(3)); UI.toast('Morwen presses an old family heirloom into your hands.'); },
+      intro:['The dead drop more than dust — staves, robes, charms, each with its own blessings.',
+        'I have given you a piece to start. Open ☰ → GEAR, pick it, and EQUIP it.',
+        'Common is white, CURSED is blue, ELDRITCH is gold with three blessings. Salvage what you do not want.'],
+      check: () => !!(G.gear.equip.staff || G.gear.equip.robe || G.gear.equip.charm) },
+
+    { icon:'♛', obj:'Visit Master Grell at the arena (east building) and view the Soul Ladder.',
+      intro:['One last introduction. Master Grell keeps the SOUL LADDER — duels against every necromancer in the valley.',
+        'His arena is the east building in town. Talk to him and VIEW THE LADDER. Duel when you feel strong; the ladder has no top rung.'],
+      check: () => !!G.tut.arenaSeen },
+
+    { icon:'★', obj:'You know everything. The valley is yours.',
+      intro:['And that is everything I can teach, little necromancer. The rest, the valley teaches.',
+        'Your long road: restore ALL FOUR manor wings to open the DEED BOOK — then buy and build homes at every SALE post, each with its own power.',
+        'Bind all 32 grims. Climb the Ladder. Sound the depths. The catacombs fall forever; so can you... try not to.',
+        'Sleep when hurt. Brew when poor. And visit an old witch now and then, hm? Off you go.'],
+      final: true },
+  ];
+
+  function showObjective(icon, text){
+    const o = $('objective');
+    $('obj-icon').textContent = icon;
+    $('obj-text').textContent = text;
+    o.classList.remove('hidden');
+  }
+  function hideObjective(){ $('objective').classList.add('hidden'); }
+
+  function update(){
+    if (!G.started || !G.tut || G.tut.done) return;
+    // track movement distance (tiles)
+    const key = `${World.map}:${World.px},${World.py}`;
+    if (Tutorial._lastTile && Tutorial._lastTile !== key) Tutorial._moved = (Tutorial._moved || 0) + 1;
+    Tutorial._lastTile = key;
+
+    const s = STEPS[G.tut.step];
+    if (!s){ G.tut.done = true; hideObjective(); return; }
+
+    // teach once per step, when no other modal is up
+    if ((s.intro || s.gift) && !G.tut.introShown){
+      if (Input.top()) return;
+      G.tut.introShown = true;
+      if (s.gift) s.gift();
+      if (s.intro) UI.say(s.intro, 'Witch Morwen');
+      return;
+    }
+    if (s.final){
+      if (!Input.top()){
+        G.tut.done = true;
+        hideObjective();
+        UI.toast('★ Tutorial complete — the valley is yours.');
+        Systems.save();
+      }
+      return;
+    }
+
+    showObjective(s.icon, `${s.obj}  (${G.tut.step + 1}/${STEPS.length - 1})`);
+    if (s.check(G)){
+      G.tut.step++;
+      G.tut.introShown = false;
+      hideObjective();
+      UI.toast('✓ Objective complete!');
+      Systems.save();
+    }
+  }
+
+  function begin(){
+    G.tut = { step: 0, introShown: false, done: false };
+    Tutorial._moved = 0;
+    Tutorial._lastTile = null;
+  }
+  function skip(){
+    if (G.tut){ G.tut.done = true; hideObjective(); UI.toast('Tutorial skipped.'); }
+  }
+  function active(){ return !!(G.tut && !G.tut.done); }
+
+  return { update, begin, skip, active, _moved: 0, _lastTile: null };
+})();

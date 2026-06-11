@@ -44,6 +44,45 @@ document.addEventListener('keyup', e => {
   if (k) Input.held[k] = false;
 });
 
+// ---------- touch controls (mobile / iPad) ----------
+// Buttons synthesize the same key events the keyboard handler consumes,
+// so all game logic (modals + real-time world) works identically.
+function fireKey(type, key){ document.dispatchEvent(new KeyboardEvent(type, { key })); }
+function initTouch(){
+  const wrap = $('touch');
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const touchable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || coarse;
+  if (!touchable) return;                 // desktop: leave hidden, keyboard only
+  wrap.classList.remove('hidden');
+  for (const btn of wrap.querySelectorAll('.tbtn')){
+    const key = btn.dataset.key;
+    const isDir = key.startsWith('Arrow');
+    const down = ev => { ev.preventDefault(); btn.classList.add('down'); fireKey('keydown', key); };
+    const up   = ev => { ev.preventDefault(); btn.classList.remove('down');
+      if (isDir) fireKey('keyup', key); };           // directions are held; actions are taps
+    btn.addEventListener('touchstart', down, { passive:false });
+    btn.addEventListener('touchend',   up,   { passive:false });
+    btn.addEventListener('touchcancel',up,   { passive:false });
+    // also support mouse for testing on desktop
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('mouseup',   up);
+    btn.addEventListener('mouseleave',e => { if (btn.classList.contains('down')) up(e); });
+  }
+}
+
+// ---------- responsive scaling: fit the 720×528 frame to the screen ----------
+function fitScreen(){
+  const g = $('game');
+  if (!g) return;
+  const pad = 8;
+  const sx = (window.innerWidth - pad) / 720;
+  const sy = (window.innerHeight - pad) / 528;
+  const s = Math.max(0.4, Math.min(sx, sy));
+  g.style.transform = `scale(${s})`;
+}
+window.addEventListener('resize', fitScreen);
+window.addEventListener('orientationchange', () => setTimeout(fitScreen, 200));
+
 // ---------- UI module ----------
 const UI = (() => {
 

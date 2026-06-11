@@ -26,15 +26,16 @@ const stub = anyStub();
 const sandbox = {
   console, Math, JSON, Object, Array, Promise, Number, String, Boolean, Set, Map,
   setTimeout, clearTimeout, parseFloat, parseInt,
-  document: stub, window: stub, performance: { now: () => 0 },
+  document: stub, window: stub, navigator: { maxTouchPoints: 0 }, performance: { now: () => 0 },
   requestAnimationFrame: () => 0, cancelAnimationFrame: () => 0,
   localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
   prompt: () => null,
+  KeyboardEvent: function(){ return {}; },
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
-const files = ['data.js','sprites.js','ui.js','combat.js','world.js','systems.js','main.js'];
+const files = ['data.js','sprites.js','ui.js','combat.js','world.js','systems.js','tutorial.js','main.js'];
 for (const f of files){
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
   vm.runInContext(src, sandbox, { filename: f });

@@ -6,9 +6,11 @@
 }
 html,body { background:#0b0812; height:100%; overflow:hidden;
   font-family:'Courier New', monospace; color:var(--ink);
-  image-rendering:pixelated; user-select:none; }
-#game { position:relative; width:720px; height:528px; margin:0 auto;
-  top:50%; transform:translateY(-50%); box-shadow:0 0 60px #000; }
+  image-rendering:pixelated; user-select:none;
+  display:flex; align-items:center; justify-content:center;
+  position:fixed; inset:0; touch-action:none; }
+#game { position:relative; width:720px; height:528px; flex:none;
+  transform-origin:center center; box-shadow:0 0 60px #000; }
 canvas#world { display:block; background:#0b0812; image-rendering:pixelated; }
 .hidden { display:none !important; }
 
@@ -136,3 +138,35 @@ button:disabled { opacity:.35; cursor:default; }
   background:#0b0812aa; padding:2px 6px; border-radius:3px; width:fit-content; }
 #keys-hint { color:#8a7fa8; text-shadow:1px 1px 0 #000; background:#0b0812aa;
   padding:2px 6px; border-radius:3px; width:fit-content; }
+
+/* Objective banner */
+#objective { position:absolute; top:30px; left:50%; transform:translateX(-50%);
+  background:rgba(35,27,48,.92); border:2px solid var(--accent); border-radius:6px;
+  padding:5px 16px; font-size:13px; font-weight:bold; z-index:22; max-width:90%;
+  text-align:center; box-shadow:0 3px 12px #000; pointer-events:none; }
+#obj-icon { color:var(--gold); }
+
+
+/* Touch controls: above modals so they work as a universal controller
+   (D-pad navigates menus, A confirms, ☰ backs out) */
+#touch { position:absolute; inset:0; z-index:75; pointer-events:none; }
+.tbtn { position:absolute; pointer-events:auto; -webkit-user-select:none; user-select:none;
+  -webkit-tap-highlight-color:transparent; touch-action:none;
+  background:rgba(46,36,64,.66); border:2px solid var(--border); color:var(--ink);
+  border-radius:10px; font-size:22px; font-weight:bold; display:flex;
+  flex-direction:column; align-items:center; justify-content:center; padding:0; }
+.tbtn:active, .tbtn.down { background:rgba(155,109,255,.85); color:#120c1e; border-color:var(--accent); }
+.tbtn small { font-size:9px; letter-spacing:1px; margin-top:-2px; }
+#dpad { position:absolute; left:14px; bottom:14px; width:150px; height:150px; }
+.dbtn { width:50px; height:50px; }
+#d-up    { left:50px; top:0; }
+#d-down  { left:50px; top:100px; }
+#d-left  { left:0; top:50px; }
+#d-right { left:100px; top:50px; }
+#abtns { position:absolute; right:14px; bottom:14px; width:160px; height:150px; }
+.act { width:56px; height:56px; }
+.act.big { width:68px; height:68px; }
+#t-bolt { right:90px; bottom:64px; }
+#t-jar  { right:96px; bottom:0; }
+#t-a    { right:8px;  bottom:18px; }
+.menu { right:14px; top:36px; width:46px; height:38px; font-size:20px; }

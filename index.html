@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>GRIMVALE — Necromancer's Almanac</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -60,7 +62,26 @@
     <div id="fish-hint">press [Z] when the bobber is in the green!</div>
   </div>
 
+  <!-- Objective banner (tutorial) -->
+  <div id="objective" class="hidden"><span id="obj-icon">◆</span> <span id="obj-text"></span></div>
+
   <div id="toast" class="hidden"></div>
+
+  <!-- Touch controls (mobile / iPad) -->
+  <div id="touch" class="hidden">
+    <div id="dpad">
+      <button class="tbtn dbtn" data-key="ArrowUp"    id="d-up">▲</button>
+      <button class="tbtn dbtn" data-key="ArrowLeft"  id="d-left">◀</button>
+      <button class="tbtn dbtn" data-key="ArrowRight" id="d-right">▶</button>
+      <button class="tbtn dbtn" data-key="ArrowDown"  id="d-down">▼</button>
+    </div>
+    <div id="abtns">
+      <button class="tbtn act" data-key="x" id="t-bolt">✦<small>BOLT</small></button>
+      <button class="tbtn act" data-key="c" id="t-jar">◍<small>JAR</small></button>
+      <button class="tbtn act big" data-key="z" id="t-a">⚔<small>A</small></button>
+    </div>
+    <button class="tbtn menu" data-key="Escape" id="t-menu">☰</button>
+  </div>
 </div>
 <script src="js/data.js"></script>
 <script src="js/sprites.js"></script>
@@ -69,6 +90,7 @@
 <script src="js/world.js"></script>
 
 <script src="js/systems.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
