@@ -13,7 +13,7 @@ const TILE_SPR = {
   'u':'stairsU','d':'stairsD','C':'chest','b':'bed','k':'cauldron','x':'box','A':'altar',
   'i':'sign','l':'flower','m':'dirt','h':'hole','a':'arena','E':'cfloor','X':'cwall',
 };
-const SOLID = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X']);
+const SOLID = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s']);
 
 // ---------- static maps ----------
 const TOWN_ROWS = [
@@ -24,7 +24,7 @@ const TOWN_ROWS = [
 '#ggGgGgGgGgggBBBBBBBBBBggfgggggggfg#',
 '#ggggggggggggBBBBDBBBBBggfgsgsgsgfg#',
 '#ggghigggggggggggpggggggfgggggggfgg#',
-'#ggGgGgGgGgggggggpggggggfffffffffgg#',
+'#ggGgGgGgGgggggggpggggggffffgffffgg#',
 '#ggggggggggggggggpggggggglgggglggg##',
 '#ggggggggggggggggpgggggggggggggggg##',
 '#gglggggglgggggggpgggggggggggggggg##',

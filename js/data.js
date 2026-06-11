@@ -459,14 +459,14 @@ const FISH_TABLE = [
 // ---------- WILD ENCOUNTER TABLES ----------
 const ENCOUNTERS = {
   woods: [
-    { sp:'wispy',    w:10, min:3, max:6 },
-    { sp:'skulpup',  w:8,  min:3, max:6 },
-    { sp:'shroomb',  w:8,  min:3, max:6 },
-    { sp:'flitbat',  w:8,  min:4, max:7 },
-    { sp:'vipervine',w:5,  min:5, max:8 },
-    { sp:'frostfae', w:4,  min:5, max:8 },
-    { sp:'mothmare', w:3,  min:6, max:9 },
-    { sp:'gloomkin', w:6,  min:6, max:9, night:true },
+    { sp:'wispy',    w:10, min:2, max:4 },
+    { sp:'skulpup',  w:8,  min:2, max:4 },
+    { sp:'shroomb',  w:8,  min:2, max:4 },
+    { sp:'flitbat',  w:8,  min:3, max:5 },
+    { sp:'vipervine',w:5,  min:3, max:5 },
+    { sp:'frostfae', w:4,  min:4, max:6 },
+    { sp:'mothmare', w:3,  min:4, max:6 },
+    { sp:'gloomkin', w:6,  min:4, max:6, night:true },
   ],
   cata: [
     { sp:'cryptmite',  w:10 },
