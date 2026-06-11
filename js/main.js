@@ -9,8 +9,11 @@ function freshGame(){
   return {
     started: true, name: 'Mourner', gold: 400,
     time: { day: 1, min: 8 * 60 },
+    pc: { hp: 50, soul: 25, atkCd: 0, boltCd: 0, inv: 0, swing: 0 },
     party: [], storage: [],
     bag: { jar: 5, tonic: 3, seed_blood: 2 },
+    gear: { equip: { staff: null, robe: null, charm: null }, bag: [] },
+    houses: {},
     dex: {}, skills: {}, farm: {},
     manor: { restored: {}, furniture: [] },
     arena: { rank: 1, wins: 0 },
@@ -27,29 +30,30 @@ async function newGame(){
   G = freshGame();
   $('title').classList.add('hidden');
   World.enter('town', 17, 8);
+  Systems.healAll();
   World.active = true;
   UI.hud();
   await UI.say([
     'Welcome to GRIMVALE, dear. I am Morwen — the witch, the doctor, and the only person here who knocks.',
     'You have inherited Hollow Manor: one good room, four ruined ones, six soil plots, and a remarkable amount of fog.',
-    'A necromancer needs a companion. I brought three soul jars. Choose, and choose with your heart.',
+    'A necromancer never fights alone. I brought three soul jars. Choose your first grim — it will rise and fight BESIDE you.',
   ], 'Witch Morwen');
   let pick = -1;
   while (pick < 0){
     pick = await UI.panelList('CHOOSE YOUR FIRST GRIM', STARTERS.map(sp => ({
       spr: SPR.creature(sp),
-      html: `<b>${DEX[sp].n}</b> ${DEX[sp].ty.map(t => `<span class="tag" style="color:${TYPES[t].col}">${TYPES[t].n}</span>`).join(' ')}<br><span class="dim">${DEX[sp].desc}</span>`,
+      html: `<b>${DEX[sp].n}</b> ${DEX[sp].ty.map(t => `<span class="tag" style="color:${TYPES[t].col}">${TYPES[t].n}</span>`).join(' ')}<br><span class="dim">${DEX[sp].desc} <i>(${ARCH[sp]})</i></span>`,
     })), { footer: 'Z: choose' });
   }
   const sp = STARTERS[pick];
-  const g = makeGrim(sp, 5);
-  G.party.push(g);
+  G.party.push(makeGrim(sp, 5));
   G.dex[sp] = 2;
+  Combat.syncMinions();
   await UI.say([
     `${DEX[sp].n}! ` + ['A gentle soul with thorns.', 'Warm hands, warmer temper.', 'It has already started crying. That means it likes you.'][pick],
-    'Your satchel holds soul jars, tonics, and two bloodberry seeds. Press X for your menu.',
-    'Cursed grass in MURKWOOD (south gate) hides wild grims. The lake bites. The hole in the graveyard goes down forever.',
-    'Sleep in your manor bed to pass days — the MOON decides what rises. Off you go, little necromancer.',
+    'THE WAY OF IT: move with WASD or arrows. Z swings your staff (or talks, when facing someone). X hurls a HEX BOLT (costs Soul). C throws a soul jar.',
+    'Wild grims roam MURKWOOD past the south gate. Weaken one below a third — a jar mark appears — then C binds it to your pack. Your pack fights with you, forever.',
+    'Restore my... YOUR manor, and the valley\'s DEED BOOK opens: land for sale everywhere, each home with its own power. Off you go, little necromancer.',
   ], 'Witch Morwen');
   Systems.save();
 }
@@ -59,8 +63,12 @@ function continueGame(){
   if (!s) return;
   Input.pop(titleKeys);
   G = s;
+  // backfill for forward compatibility
   G.flags = G.flags || { chests: {} };
   G.flags.chests = G.flags.chests || {};
+  G.pc = G.pc || { hp: 50, soul: 25, atkCd: 0 };
+  G.gear = G.gear || { equip: { staff: null, robe: null, charm: null }, bag: [] };
+  G.houses = G.houses || {};
   $('title').classList.add('hidden');
   World.enter(G.pos.map, G.pos.x, G.pos.y);
   World.active = true;
@@ -91,7 +99,7 @@ Input.push(titleKeys);
 // ---------- loop ----------
 let lastT = performance.now(), saveT = 0;
 function loop(t){
-  const dt = Math.min(0.1, (t - lastT) / 1000);
+  const dt = Math.min(0.05, (t - lastT) / 1000);
   lastT = t;
   if (G.started){
     World.update(dt);

@@ -18,23 +18,38 @@ Open `index.html` in any modern browser. That's it.
 
 (Or serve it: `npx serve .` / `python3 -m http.server` and open the URL.)
 
+Combat is **real-time action-RPG**, not turn-based: your bound grims fight
+beside you as a living pack while you move freely, swing your staff, hurl hex
+bolts, and throw soul jars to capture weakened enemies — all on the overworld
+map.
+
 ### Controls
 
 | Key | Action |
 |---|---|
-| Arrows / WASD | Move (tap for one step, hold to walk) |
-| Z / Enter / Space | Interact · confirm |
-| X / Esc | Menu · cancel |
+| WASD / Arrows | Move freely (8-directional) |
+| Z | Staff melee · or interact when facing an NPC/object |
+| X | Hex bolt (ranged, costs Soul, auto-aims) |
+| C | Throw a soul jar at the nearest weakened enemy (capture) |
+| Esc / Enter | Pause menu (pack, satchel, gear, skills, deeds, grimdex) |
+| In menus | Arrows move · Z confirm · X / Esc back |
 
 ## What's in the box
 
 ![Town](docs/town.png) ![Battle](docs/battle.png)
 
 - **32 original grims** across 11 types (Spirit, Shadow, Bone, Flora, Fungus,
-  Ember, Frost, Venom, Drowned, Moon...), with evolutions, learnsets, and a
-  Grimdex to fill.
-- **Turn-based battles** — type effectiveness, STAB, crits, poison/burn/sleep,
-  stat stages, capture mechanics with three jar tiers.
+  Ember, Frost, Venom, Drowned, Moon...), with evolutions and a Grimdex to fill.
+- **Real-time horde combat** — amass a pack of up to 9 grims (cap grows with
+  Necromancy) that fight enemies live on the map. Each species has a combat
+  archetype (chaser, swift wisp, ranged spitter, heavy tank, volley caster).
+  Type effectiveness still applies. Weaken an enemy below a third, then throw a
+  soul jar (3 tiers) to bind it into your pack.
+- **PoE-style gear** — staves, robes, and charms drop from kills and chests
+  with random affixes at three rarities (common / cursed / eldritch). Equip,
+  unequip, or salvage for gold.
+- **Buildable real estate** — beyond the manor, **9 deed plots** across the
+  valley, each with its own location buff, upgradeable camp → cottage → hall.
 - **5 player skills with NO level cap** — Necromancy, Fishing, Farming,
   Brewing, Delving. Every level grants real bonuses and gates new content
   (rods, seeds, recipes, deeper descents).
@@ -42,9 +57,14 @@ Open `index.html` in any modern browser. That's it.
   living grims. Your Farming level decides how strong they hatch.
 - **Fishing** — a timing minigame at any water tile. Some fish bite only at
   night; the rarest only under a NEW or FULL moon (sleep to pass days).
-- **Housing** — restore the manor's four ruined wings (kitchen → cauldron
-  brewing, study → +15% XP, conservatory → indoor double-speed plots, crypt →
-  trophy hall), and decorate with 11 placeable furnishings.
+- **Housing, two tiers of it** — first restore the manor's four ruined wings
+  (kitchen → cauldron brewing, study → +15% XP, conservatory → fast indoor
+  plots, crypt → reward chest) as a **tutorial**. Finishing it unlocks the
+  **Deed Book**: buy land at SALE posts all over the valley and build it up.
+  Each location does something different — Hunter's Cabin (pack XP), Lakeside
+  Pier (rare fish), Graveyard Ossuary (start catacomb dives deeper), Square
+  Townhouse (shop discount + daily rent), Moonhill Tower (capture + brewing),
+  and more. Every house has its own interior you can decorate with furniture.
 - **Endless catacombs** — procedurally generated floors that scale forever,
   richer chests the deeper you go, and a guardian to bind every 5th floor.
   The Hollow King waits at B25. The stairs keep going.

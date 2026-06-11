@@ -492,7 +492,108 @@ const RIVAL_POOL = ['wispy','banshriek','skulpup','gravehound','shroomb','mycolo
   'murkoi','boneel','phantfin','lanternjaw','cryptmite','cryptlord','hollowshade','emberghast',
   'rotwalker','thornwraith','pyrelich','mireghast'];
 
-// ---------- MANOR ROOMS ----------
+// ---------- COMBAT ARCHETYPES (real-time behaviour per species) ----------
+// chaser: melee pursuit · wisp: fast erratic melee · spitter: ranged, keeps distance
+// tank: slow, heavy, lots of hp · caster: 3-shot volleys
+const ARCH = {
+  sproutling:'chaser',  thornwraith:'caster', cindling:'spitter',  pyrelich:'caster',
+  dripp:'chaser',       mireghast:'tank',     wispy:'wisp',        banshriek:'wisp',
+  skulpup:'chaser',     gravehound:'chaser',  shroomb:'spitter',   mycolossus:'tank',
+  flitbat:'wisp',       nocturnyx:'wisp',     vipervine:'spitter', frostfae:'caster',
+  mothmare:'caster',    gloomkin:'chaser',    pumpkid:'chaser',    jackrot:'tank',
+  mandragora:'tank',    murkoi:'chaser',      boneel:'chaser',     phantfin:'wisp',
+  lanternjaw:'spitter', moonscale:'caster',   cryptmite:'chaser',  cryptlord:'tank',
+  hollowshade:'wisp',   emberghast:'spitter', rotwalker:'tank',    hollowking:'caster',
+};
+const ARCH_STATS = { // hpMult, dmgMult, speed(px/s), attack range/cadence handled in combat
+  chaser: { hp:1.0, dmg:1.0, spd:95  },
+  wisp:   { hp:0.7, dmg:0.8, spd:150 },
+  spitter:{ hp:0.8, dmg:0.9, spd:70  },
+  tank:   { hp:1.8, dmg:1.4, spd:48  },
+  caster: { hp:0.9, dmg:1.1, spd:60  },
+};
+
+// ---------- GEAR (PoE-style affix drops; slots: staff / robe / charm) ----------
+const AFFIXES = {
+  dmg:     { n:'+#% melee damage',    base:8,  per:2.0 },
+  bolt:    { n:'+#% hex bolt damage', base:10, per:2.5 },
+  minion:  { n:'+#% minion damage',   base:8,  per:2.0 },
+  hp:      { n:'+# max life',         base:10, per:3.0 },
+  soul:    { n:'+# max soul',         base:6,  per:1.5 },
+  regen:   { n:'+#% soul regen',      base:15, per:2.0 },
+  speed:   { n:'+#% move speed',      base:5,  per:0.5, cap:30 },
+  capture: { n:'+#% capture odds',    base:6,  per:1.0 },
+  gold:    { n:'+#% gold found',      base:10, per:2.0 },
+  xp:      { n:'+#% grim XP',         base:6,  per:1.2 },
+};
+const GEAR_BASES = {
+  staff: ['Femur Rod','Willow Staff','Grave Sceptre','Hollow Crook'],
+  robe:  ['Mourning Robe','Grave Shroud','Moth Cloak','Pale Vestment'],
+  charm: ['Knuckle Charm','Moon Locket','Wax Seal','Ghost Bell'],
+};
+const GEAR_PREFIX = ['Whispering','Sodden','Cursed','Moonlit','Smouldering','Rotten','Gleaming','Wormy','Sainted','Umbral'];
+const RARITIES = [
+  { n:'common',   col:'#cdc4e8', affixes:1 },
+  { n:'cursed',   col:'#5d8ae8', affixes:2 },
+  { n:'eldritch', col:'#e8c95d', affixes:3 },
+];
+function rollGear(zoneLvl){
+  const slot = ['staff','robe','charm'][rnd(3)];
+  const r = Math.random();
+  const rar = r < 0.08 ? 2 : r < 0.35 ? 1 : 0;
+  const keys = Object.keys(AFFIXES);
+  const aff = {};
+  for (let i = 0; i <= rar; i++){
+    const k = keys[rnd(keys.length)];
+    const A = AFFIXES[k];
+    let v = Math.round((A.base + A.per * zoneLvl) * (0.7 + Math.random() * 0.6));
+    if (A.cap) v = Math.min(A.cap, v);
+    aff[k] = (aff[k] || 0) + v;
+  }
+  return {
+    slot, rar, lvl: zoneLvl, aff,
+    name: (rar > 0 ? GEAR_PREFIX[rnd(GEAR_PREFIX.length)] + ' ' : '') + GEAR_BASES[slot][rnd(4)],
+  };
+}
+function gearAffix(key){ // sum of an affix across equipped gear
+  let v = 0;
+  for (const s of ['staff','robe','charm']){
+    const g = G.gear.equip[s];
+    if (g && g.aff[key]) v += g.aff[key];
+  }
+  return v;
+}
+
+// ---------- BUILDABLE PLOTS (Deeds system; unlocks after the manor tutorial) ----------
+// tiers: 0 unowned land -> 1 camp -> 2 cottage -> 3 hall. Buffs scale with tier.
+const PLOTS = {
+  cabin:    { n:"Hunter's Cabin",   map:'woods', x:8,  y:12, land:3000,
+    buff:'Minions earn +10% XP per tier from wild kills.', },
+  hide:     { n:'Deep-Woods Hide',  map:'woods', x:26, y:21, land:4500,
+    buff:'Murkwood spawns +2 extra grims and more rare ones per tier.' },
+  pondshack:{ n:'Pond Shack',       map:'woods', x:20, y:15, land:5000,
+    buff:'Fishing catch-window +6% per tier.' },
+  moontower:{ n:'Moonhill Tower',   map:'woods', x:27, y:5,  land:14000,
+    buff:'+5% capture odds and +5% double-brew chance per tier.' },
+  townhouse:{ n:'Square Townhouse', map:'town',  x:13, y:10, land:8000,
+    buff:'Shop prices -5% per tier, plus 60⛁ rent per tier each day.' },
+  garden:   { n:'Garden Cottage',   map:'town',  x:31, y:10, land:6000,
+    buff:'Crops grow +15% faster per tier.' },
+  ossuary:  { n:'Graveyard Ossuary',map:'town',  x:2,  y:9,  land:12000,
+    buff:'Begin catacomb dives 2 floors deeper per tier.' },
+  pier:     { n:'Lakeside Pier',    map:'town',  x:33, y:19, land:9000,
+    buff:'Rare fish bite +20% more per tier.' },
+  shore:    { n:'Shore Cottage',    map:'town',  x:22, y:24, land:7000,
+    buff:'+6% capture odds on hooked fish per tier.' },
+};
+const PLOT_TIERS = [
+  null,
+  { n:'Camp',    cost:{ gold:1500,  plank:4 },                    furn:4 },
+  { n:'Cottage', cost:{ gold:5000,  plank:8,  stone:6 },          furn:8 },
+  { n:'Hall',    cost:{ gold:15000, plank:12, stone:12, ecto:6 }, furn:14 },
+];
+function plotTier(id){ return (G.houses[id] && G.houses[id].tier) || 0; }
+
 const ROOMS = {
   kitchen:      { n:'Kitchen Wing',  cost:{gold:800,  plank:3, stone:2 }, d:'Unlocks the brewing cauldron.' },
   study:        { n:'Study',         cost:{gold:1500, plank:4, stone:3, ecto:1 }, d:'Restored: all grims gain +15% XP.' },

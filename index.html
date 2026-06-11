@@ -26,7 +26,7 @@
       <button id="btn-new">NEW GAME</button>
       <button id="btn-continue">CONTINUE</button>
     </div>
-    <p class="hint">Move: Arrows / WASD &nbsp;·&nbsp; Confirm: Z / Enter / Space &nbsp;·&nbsp; Menu/Cancel: X / Esc</p>
+    <p class="hint">Move: WASD / Arrows &nbsp;·&nbsp; Z: staff / interact &nbsp;·&nbsp; X: hex bolt &nbsp;·&nbsp; C: soul jar &nbsp;·&nbsp; Esc: menu</p>
   </div>
 
   <!-- Dialog box -->
@@ -45,18 +45,12 @@
   <!-- Pause menu -->
   <div id="pause" class="hidden"></div>
 
-  <!-- Battle screen -->
-  <div id="battle" class="hidden">
-    <div id="b-enemy" class="b-side">
-      <div class="b-info" id="b-enemy-info"></div>
-      <canvas id="b-enemy-spr" width="96" height="96"></canvas>
-    </div>
-    <div id="b-player" class="b-side">
-      <canvas id="b-player-spr" width="96" height="96"></canvas>
-      <div class="b-info" id="b-player-info"></div>
-    </div>
-    <div id="b-log"></div>
-    <div id="b-actions"></div>
+  <!-- Vitals (real-time HUD) -->
+  <div id="vitals" class="hidden">
+    <div class="vbar"><div id="hp-fill" class="vfill hp"></div><span id="hp-txt"></span></div>
+    <div class="vbar"><div id="soul-fill" class="vfill soul"></div><span id="soul-txt"></span></div>
+    <div id="pack-txt"></div>
+    <div id="keys-hint">Z staff &nbsp;X bolt &nbsp;C jar &nbsp;Esc menu</div>
   </div>
 
   <!-- Fishing minigame -->
@@ -71,8 +65,9 @@
 <script src="js/data.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/combat.js"></script>
 <script src="js/world.js"></script>
-<script src="js/battle.js"></script>
+
 <script src="js/systems.js"></script>
 <script src="js/main.js"></script>
 </body>

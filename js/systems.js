@@ -1,6 +1,6 @@
 // ============================================================
-// GRIMVALE — systems: skills, farming, fishing, housing,
-// catacombs, the Soul Ladder arena, shop, menus, save/load.
+// GRIMVALE — systems: skills, farming, fishing, manor + deeds
+// housing, catacombs, Soul Ladder, gear, shop, menus, saves.
 // ============================================================
 'use strict';
 
@@ -16,33 +16,28 @@ const Systems = (() => {
     if (nw > old) UI.toast(`${SKILLS[s].icon} ${SKILLS[s].n} rose to Lv.${nw}!`);
   }
 
-  // ---------- encounters & loss ----------
+  function healAll(){
+    G.pc.hp = Combat.pstats().maxhp;
+    G.pc.soul = Combat.pstats().maxsoul;
+    for (const g of G.party){ g.hp = statsFor(g.sp, g.lvl).maxhp; g.status = null; delete g.downT; }
+    Combat.syncMinions();
+  }
+
+  // ---------- defeat ----------
   async function afterLoss(){
     await UI.say(['Everything went dark...',
       'You wake in your own bed at Hollow Manor. Witch Morwen must have dragged you home — and helped herself to some coin for the trouble.']);
     G.gold = Math.max(0, G.gold - Math.ceil(G.gold * 0.1));
-    for (const g of G.party){ g.hp = statsFor(g.sp, g.lvl).maxhp; g.status = null; }
     World.cata = null;
+    World.houseId = null;
     World.enter('manor', 10, 9);
+    healAll();
     save();
-  }
-
-  async function wildEncounter(zone){
-    let pool = ENCOUNTERS[zone].filter(e => !e.night || UI.isNight());
-    const e = pickW(pool);
-    let lvl;
-    if (zone === 'cata'){
-      lvl = 3 + World.cataFloor * 2 + rnd(3);
-    } else {
-      lvl = e.min + rnd(e.max - e.min + 1) + Math.floor((skillLvl('necromancy') - 1) * 0.7);
-    }
-    const r = await Battle.start({ eParty:[makeGrim(e.sp, lvl)], canCatch:true, canRun:true });
-    if (r.wiped) await afterLoss();
   }
 
   // ---------- farming ----------
   function growMult(map){
-    let m = 1 + 0.02 * (skillLvl('farming') - 1);
+    let m = 1 + 0.02 * (skillLvl('farming') - 1) + 0.15 * plotTier('garden');
     if (map === 'manor') m *= 2; // conservatory beds
     return m;
   }
@@ -71,7 +66,6 @@ const Systems = (() => {
     const stage = cropStage(p);
     if (stage < 3){
       if (!p.wet){
-        // watering rebases progress so growth already made is kept
         const tDry = CROPS[p.crop].time / growMult(p.map);
         const frac = (nowMin() - p.at) / tDry;
         p.wet = true;
@@ -101,8 +95,8 @@ const Systems = (() => {
       skillAdd('necromancy', 20);
       await UI.say([`The soil heaves... something claws its way out!`,
         `A ${DEX[sp].n} (Lv.${lvl}) crawls from your garden and stares at you adoringly.`]);
-      if (G.party.length < 6) G.party.push(g);
-      else { G.storage.push(g); await UI.say('Your party is full — it was sent to the storage box.'); }
+      if (G.party.length < Combat.minionCap()){ G.party.push(g); Combat.syncMinions(); }
+      else { G.storage.push(g); await UI.say('Your pack is full — it was sent to the storage box.'); }
     }
   }
 
@@ -115,10 +109,9 @@ const Systems = (() => {
       zone.style.left = zoneX + '%'; zone.style.width = zoneW + '%';
       let t = Math.random() * 6, done = false, raf;
       const speed = 2.4 + Math.random() * 1.2;
-      function frame(ts){
+      function frame(){
         t += 0.016 * speed;
-        const pos = (Math.sin(t) + 1) / 2 * 95;
-        marker.style.left = pos + '%';
+        marker.style.left = ((Math.sin(t) + 1) / 2 * 95) + '%';
         if (!done) raf = requestAnimationFrame(frame);
       }
       raf = requestAnimationFrame(frame);
@@ -140,20 +133,21 @@ const Systems = (() => {
     let rod = Inv.bestRod();
     if (!rod) return UI.say('The water churns hungrily, but you have no rod. Fisher Eli by the lake might help.');
     const fl = skillLvl('fishing');
-    const allowed = fl >= (SKILL_REQ.rod[3]) ? 3 : fl >= SKILL_REQ.rod[2] ? 2 : 1;
+    const allowed = fl >= SKILL_REQ.rod[3] ? 3 : fl >= SKILL_REQ.rod[2] ? 2 : 1;
     if (rod > allowed){
       UI.toast(`Fishing Lv.${SKILL_REQ.rod[rod]} needed for that rod — using a lesser one.`);
       rod = allowed;
     }
     const bait = Inv.bestBait();
     if (bait) Inv.take(bait, 1);
-    const moon = UI.moonPhase(); // 0 new, 2 full
+    const moon = UI.moonPhase();
     let pool = FISH_TABLE.filter(e =>
       e.rod <= rod &&
       (!e.night || UI.isNight()) &&
       (!e.moon || (e.moon === 'new' && moon === 0) || (e.moon === 'full' && moon === 2)));
-    pool = pool.map(e => ({ ...e, w: e.w * (e.rod > 1 && bait ? 1 + ITEMS[bait].tier : 1) }));
-    const zonePct = Math.min(45, 16 + fl * 1.1 + rod * 2);
+    pool = pool.map(e => ({ ...e,
+      w: e.w * (e.rod > 1 && bait ? 1 + ITEMS[bait].tier : 1) * (e.rod > 1 ? 1 + 0.2 * plotTier('pier') : 1) }));
+    const zonePct = Math.min(50, 16 + fl * 1.1 + rod * 2 + 6 * plotTier('pondshack'));
     const hit = await fishGame(zonePct);
     if (!hit){
       skillAdd('fishing', 3);
@@ -162,13 +156,17 @@ const Systems = (() => {
     const e = pickW(pool);
     const lvl = e.min + rnd(e.max - e.min + 1) + Math.floor(fl / 2);
     skillAdd('fishing', 12 + lvl + (DEX[e.sp].rare ? 50 : 0));
-    const r = await Battle.start({ eParty:[makeGrim(e.sp, lvl)], canCatch:true, canRun:true,
-      intro:`You hooked a ${DEX[e.sp].n}${DEX[e.sp].rare ? ' — a legend of the deep!' : '!'}` });
-    if (r.win) skillAdd('fishing', 10 + lvl);
-    if (r.wiped) await afterLoss();
+    // the catch erupts from the water and attacks!
+    const [fx, fy] = World.faceVec();
+    Combat.spawnEnemy(e.sp, lvl, {
+      x: World.ppx + fx * TILE * 1.6, y: World.ppy + fy * TILE * 1.6 - 10,
+      aggro: true, hooked: true });
+    UI.toast(`You hooked a ${DEX[e.sp].n} (Lv.${lvl})${DEX[e.sp].rare ? ' — a LEGEND of the deep!' : '!'} It fights back!`);
   }
 
-  // ---------- housing ----------
+  // ---------- manor (the housing tutorial) ----------
+  function manorDone(){ return ['kitchen','study','conservatory','crypt'].every(r => G.manor.restored[r]); }
+
   async function restore(x, y){
     if (World.map !== 'manor') return;
     const room = RESTORE_AT[`${x},${y}`];
@@ -188,56 +186,68 @@ const Systems = (() => {
     skillAdd('delving', 30);
     await UI.say(`The rubble clears itself away, stone by stone. The ${R.n} is yours again!`);
     if (room === 'crypt') await UI.say('Deep in the crypt, a sealed chest waits beside the old altar.');
+    if (manorDone()){
+      await UI.say(['As the last room settles, a raven drops a heavy ledger at your feet: THE DEED BOOK.',
+        '★ The manor is whole! You can now BUY LAND all over the valley.',
+        'Look for the yellow SALE posts — in town, by the lake, the graveyard, and deep in Murkwood. Each location grants its own power, and each can grow from camp to cottage to hall.']);
+    }
     save();
   }
 
   async function placeFurniture(x, y){
-    if (World.map !== 'manor') return;
-    const i = G.manor.furniture.findIndex(f => f.x === x && f.y === y);
+    const list = World.map === 'manor' ? G.manor.furniture
+      : World.houseId ? G.houses[World.houseId].furniture : null;
+    if (!list) return;
+    const i = list.findIndex(f => f.x === x && f.y === y);
     if (i >= 0){
-      const f = G.manor.furniture[i];
+      const f = list[i];
       if (await UI.confirm(`Put the ${ITEMS[f.id].n} back in your satchel?`)){
-        G.manor.furniture.splice(i, 1);
+        list.splice(i, 1);
         Inv.add(f.id, 1);
       }
       return;
     }
     if (!UI.bagEntries(it => it.k === 'furn').length) return;
+    if (World.houseId){
+      const cap = PLOT_TIERS[plotTier(World.houseId)].furn;
+      if (list.length >= cap) return UI.say(`This ${PLOT_TIERS[plotTier(World.houseId)].n.toLowerCase()} fits only ${cap} furnishings. Upgrade it for more.`);
+    }
     const id = await UI.pickItem(it => it.k === 'furn', 'PLACE WHICH FURNISHING?');
     if (!id) return;
     Inv.take(id, 1);
-    G.manor.furniture.push({ id, x, y });
+    list.push({ id, x, y });
     UI.toast(`Placed the ${ITEMS[id].n}.`);
   }
 
   async function sleep(){
-    if (!(await UI.confirm('Sleep until morning? Your grims will fully recover.'))) return;
+    if (!(await UI.confirm('Sleep until morning? You and your grims will fully recover.'))) return;
     G.time.day++; G.time.min = 6 * 60;
-    for (const g of G.party){ g.hp = statsFor(g.sp, g.lvl).maxhp; g.status = null;
-      for (const m of g.moves) m.pp = MOVES[m.id].pp; }
+    healAll();
     save();
     await UI.say(`You dream of ${['endless staircases','a fish with your name','singing pumpkins','the moon, blinking','a polite skeleton'][rnd(5)]}... and wake refreshed. (${UI.moonPhase() === 2 ? 'The moon is FULL tonight.' : UI.moonPhase() === 0 ? 'The moon is NEW tonight.' : 'Day ' + G.time.day})`);
   }
 
   async function storage(){
     for(;;){
-      const c = await UI.choice([`Deposit a grim (party: ${G.party.length})`, `Withdraw a grim (box: ${G.storage.length})`, 'Close']);
-      if (c <= -1 || c === 2) return;
+      const c = await UI.choice([`Deposit a grim (pack: ${G.party.length}/${Combat.minionCap()})`, `Withdraw a grim (box: ${G.storage.length})`, 'Close']);
+      if (c === -1 || c === 2) return;
       if (c === 0){
         if (G.party.length <= 1){ await UI.say('You cannot deposit your last grim.'); continue; }
         const i = await UI.party('DEPOSIT WHICH GRIM?');
         if (i < 0) continue;
         const g = G.party.splice(i, 1)[0];
         G.storage.push(g);
+        Combat.syncMinions();
         UI.toast(`${g.nick} curls up in the box.`);
       } else {
         if (!G.storage.length){ await UI.say('The box is empty.'); continue; }
-        if (G.party.length >= 6){ await UI.say('Your party is full (6).'); continue; }
+        if (G.party.length >= Combat.minionCap()){ await UI.say(`Your pack is full (${Combat.minionCap()}). It grows with Necromancy.`); continue; }
         const i = await UI.panelList('WITHDRAW WHICH GRIM?', G.storage.map(g => ({
           spr: SPR.creature(g.sp), html: UI.grimRowHTML(g) })), { footer:'Z: select · X: back' });
         if (i < 0) continue;
         const g = G.storage.splice(i, 1)[0];
         G.party.push(g);
+        Combat.syncMinions();
         UI.toast(`${g.nick} rejoins you.`);
       }
     }
@@ -262,7 +272,7 @@ const Systems = (() => {
     if (!a.have) return UI.say('You lack the ingredients. The farm provides.');
     Object.entries(a.b.ins).forEach(([k,n]) => Inv.take(k, n));
     let qty = 1;
-    if (Math.random() < 0.02 * bl){ qty = 2; UI.toast('A perfect brew — double batch!'); }
+    if (Math.random() < 0.02 * bl + 0.05 * plotTier('moontower')){ qty = 2; UI.toast('A perfect brew — double batch!'); }
     Inv.add(a.b.out, qty);
     skillAdd('brewing', 20 + (SKILL_REQ.brew[a.b.out] || 1) * 6);
     await UI.say(`The cauldron belches green smoke. You bottle ${qty}× ${ITEMS[a.b.out].n}.`);
@@ -272,21 +282,90 @@ const Systems = (() => {
     if (G.flags.altarDay === G.time.day)
       return UI.say('The altar is quiet. It has given all it can today.');
     G.flags.altarDay = G.time.day;
-    for (const g of G.party){ g.hp = statsFor(g.sp, g.lvl).maxhp; g.status = null; }
-    await UI.say('Cold light washes over your grims. They are fully restored.');
+    healAll();
+    await UI.say('Cold light washes over you and your grims. All are fully restored.');
   }
+
+  // ---------- DEEDS: buildable plots ----------
+  async function plotMenu(id){
+    const P = PLOTS[id];
+    const owned = !!G.houses[id];
+    const tier = plotTier(id);
+    if (!manorDone() && !owned){
+      return UI.say([`A weathered post: "FOR SALE — ${P.n}."`,
+        'The Gravedigger spits: "Deed book\'s still buried in your manor\'s rubble, friend. Finish restoring ALL FOUR wings of Hollow Manor first."']);
+    }
+    for(;;){
+      const opts = [];
+      if (!owned) opts.push(`Buy land — ${P.land}⛁`);
+      else if (tier < 3){
+        const T = PLOT_TIERS[tier + 1];
+        const costTxt = Object.entries(T.cost).map(([k,n]) => k === 'gold' ? `${n}⛁` : `${n} ${ITEMS[k].n}`).join(', ');
+        opts.push(`Upgrade to ${T.n} — ${costTxt}`);
+      }
+      if (tier >= 1) opts.push('Enter house');
+      opts.push('About this plot', 'Leave');
+      const c = await UI.choice(opts);
+      const pick = c < 0 ? 'Leave' : opts[c];
+      if (pick === 'Leave' || c === -1) return;
+      if (pick.startsWith('About')){
+        await UI.say([`${P.n} — ${tier ? PLOT_TIERS[tier].n + ' (tier ' + tier + '/3)' : 'unclaimed land, ' + P.land + '⛁'}.`,
+          `Location power: ${P.buff}`,
+          tier ? `Furnishing slots: ${G.houses[id].furniture.length}/${PLOT_TIERS[tier].furn}.` :
+          'Buy it to raise a camp, then upgrade to cottage and hall — bigger rooms, stronger power.']);
+        continue;
+      }
+      if (pick.startsWith('Buy land')){
+        if (G.gold < P.land){ await UI.say(`You need ${P.land}⛁. (You have ${G.gold}⛁)`); continue; }
+        if (!(await UI.confirm(`Buy ${P.n} for ${P.land}⛁?`))) continue;
+        G.gold -= P.land;
+        G.houses[id] = { tier: 0, furniture: [] };
+        // immediately offer the camp build
+        await UI.say(`The land is yours! Now raise a ${PLOT_TIERS[1].n} on it.`);
+        return plotMenu(id);
+      }
+      if (pick.startsWith('Upgrade')){
+        const T = PLOT_TIERS[tier + 1];
+        const needs = Object.entries(T.cost).filter(([k]) => k !== 'gold');
+        const can = G.gold >= (T.cost.gold || 0) && needs.every(([k,n]) => Inv.count(k) >= n);
+        if (!can){ await UI.say('You lack gold or materials. (The shop sells planks and stone; ectoplasm hides in the catacombs.)'); continue; }
+        if (!(await UI.confirm(`Build the ${T.n}?`))) continue;
+        G.gold -= T.cost.gold || 0;
+        needs.forEach(([k,n]) => Inv.take(k, n));
+        G.houses[id].tier = tier + 1;
+        skillAdd('delving', 25 * (tier + 1));
+        await UI.say([`Hammers you did not hire knock through the night... the ${T.n} stands!`,
+          `Location power active: ${P.buff}`]);
+        save();
+        return;
+      }
+      if (pick === 'Enter house'){
+        World.houseId = id;
+        const rows = genHouse(plotTier(id));
+        const dx = Math.floor(rows[0].length / 2);
+        World.enter('house', dx, rows.length - 2);
+        return;
+      }
+    }
+  }
+  // special-case tier-0 owned land: PLOTS with tier 0 need building before buffs/entry
+  // (plotTier returns 0 for owned-but-unbuilt; tier 1 = camp)
 
   // ---------- catacombs ----------
   async function enterCata(){
     if (!(await UI.confirm('A cold draft rises from the dark. Descend into the catacombs?', 'The Hole'))) return;
-    World.cataFloor = 1;
-    World.cata = genCata(1);
-    G.cata.maxFloor = Math.max(G.cata.maxFloor || 0, 1);
+    const start = 1 + 2 * plotTier('ossuary');
+    World.cataFloor = start;
+    World.cata = genCata(start);
+    G.cata.maxFloor = Math.max(G.cata.maxFloor || 0, start);
     World.enter('cata', World.cata.start[0], World.cata.start[1]);
-    UI.toast('Catacombs B1 — Z on stairs to climb out.');
+    UI.toast(`Catacombs B${start}${start > 1 ? ' (ossuary shortcut)' : ''} — fight to the stairs.`);
   }
   async function descend(){
-    if (World.cata.boss && !World.cata.bossDown) return cataBoss();
+    if (Combat.enemies().some(e => e.boss)){
+      UI.toast('The guardian bars the stairs — slay or bind it first!');
+      return;
+    }
     const step = 1 + Math.floor(skillLvl('delving') / 5);
     World.cataFloor += step;
     World.cata = genCata(World.cataFloor);
@@ -296,7 +375,7 @@ const Systems = (() => {
     UI.toast(`Catacombs B${World.cataFloor}${step > 1 ? ` (descended ${step} floors!)` : ''}`);
   }
   async function ascend(){
-    if (World.cataFloor <= 1){
+    if (World.cataFloor <= 1 + 2 * plotTier('ossuary')){
       World.cata = null;
       World.enter('town', 4, 7);
       UI.toast('You climb back into the gloomy daylight.');
@@ -305,8 +384,6 @@ const Systems = (() => {
     World.cataFloor--;
     World.cata = genCata(World.cataFloor);
     World.enter('cata', World.cata.far[0], World.cata.far[1]);
-    // stand on 'd'? move off stairs to avoid instant re-descend
-    World.cata.rows[World.cata.far[1]] = World.cata.rows[World.cata.far[1]]; // keep
     UI.toast(`Catacombs B${World.cataFloor}`);
   }
 
@@ -316,9 +393,14 @@ const Systems = (() => {
       if (World.cata.opened[`${x},${y}`]) return UI.say('Empty. Someone — probably you — got here first.');
       World.cata.opened[`${x},${y}`] = true;
       const f = World.cataFloor, dl = skillLvl('delving');
-      const gold = Math.floor((30 + f * 15) * (1 + 0.03 * dl) * (0.8 + Math.random() * 0.5));
+      const gold = Math.floor((30 + f * 15) * (1 + 0.03 * dl) * (1 + gearAffix('gold')/100) * (0.8 + Math.random() * 0.5));
       G.gold += gold;
       skillAdd('delving', 12);
+      if (Math.random() < 0.30){
+        const gear = rollGear(Combat.zoneLevel('cata'));
+        if (G.gear.bag.length < 60){ G.gear.bag.push(gear);
+          return UI.say(`The chest creaks open: ${gold}⛁ and ${RARITIES[gear.rar].n} gear — ${gear.name}!`); }
+      }
       const lootPool = [
         ['ecto', 1], ['stone', 2], ['plank', 2], ['tonic', 1], ['jar', 2],
         f >= 5 ? ['gjar', 1] : ['worm', 3],
@@ -337,61 +419,23 @@ const Systems = (() => {
       G.gold += 250; Inv.add('gjar', 2); Inv.add('ecto', 1);
       return UI.say('Inside: 250⛁, 2× Greater Jar, and a wobbling lump of Ectoplasm!');
     }
-    if (World.map === 'manor'){ // crypt reward chest
+    if (World.map === 'manor'){
       G.gold += 1000; Inv.add('ajar', 2); Inv.add('seed_mystery', 1);
       return UI.say('The sealed chest sighs open: 1000⛁, 2× Ancient Jar, and a Mystery Seed!');
     }
   }
 
-  const BOSS_LADDER = ['gravehound','mycolossus','nocturnyx','cryptlord','hollowking'];
-  async function cataBoss(){
-    const f = World.cataFloor;
-    const idx = Math.min(BOSS_LADDER.length - 1, Math.floor(f / 5) - 1);
-    const sp = f % 25 === 0 ? 'hollowking' : BOSS_LADDER[idx % BOSS_LADDER.length];
-    const lvl = 6 + f * 2 + rnd(3);
-    await UI.say(`Something vast unfolds from the shadows guarding the stairs... a ${DEX[sp].n} (Lv.${lvl})!`);
-    const r = await Battle.start({ eParty:[makeGrim(sp, lvl)], canCatch:true, canRun:false,
-      intro:`The ${DEX[sp].n} bars your way!` });
-    if (r.wiped) return afterLoss();
-    if (r.win){
-      World.cata.bossDown = true;
-      const gold = 100 + f * 25;
-      G.gold += gold;
-      skillAdd('delving', 40 + f * 3);
-      skillAdd('necromancy', 30 + f * 2);
-      await UI.say(`The guardian dissolves into grave-dust. You claim ${gold}⛁. The stairs lie open.`);
-      if (sp === 'hollowking' && !G.flags.kingFallen){
-        G.flags.kingFallen = true;
-        await UI.say(['The Hollow King\'s crown rolls to your feet, then crumbles.',
-          'The catacombs rumble approvingly. They go deeper. They always go deeper...',
-          '★ You have conquered floor 25 — but the descent is ENDLESS. How deep can you go?']);
-      }
-      save();
-    }
-  }
-
-  // ---------- arena: the Soul Ladder ----------
-  function genRival(rank){
-    const name = RIVAL_NAMES[rnd(RIVAL_NAMES.length)];
-    const title = RIVAL_TITLES[rnd(RIVAL_TITLES.length)];
-    const size = Math.min(6, 1 + Math.ceil(rank / 2));
-    const lvl = Math.max(3, 4 + Math.floor(rank * 2.2));
-    const party = [];
-    for (let i = 0; i < size; i++)
-      party.push(makeGrim(RIVAL_POOL[rnd(RIVAL_POOL.length)], Math.max(2, lvl - 1 + rnd(3))));
-    return { name: `${name} the ${title}`, party };
-  }
-
+  // ---------- the Soul Ladder (real-time duels) ----------
+  let duel = null; // {kind:'ladder'|'woods', rank, name}
   async function arena(){
     const rank = G.arena.rank;
     for(;;){
       const c = await UI.choice([`Duel — Soul Ladder Rank ${rank}`, 'View the Ladder', 'How it works', 'Leave']);
-      if (c <= 0 && c !== 0) return;
       if (c === 3 || c === -1) return;
       if (c === 2){
         await UI.say(['"Every necromancer in the valley duels on the Soul Ladder," Grell rumbles.',
-          '"Beat the rank above you, take their place. There is no top. There is only UP."',
-          '"Your grims keep their wounds — brew tonics, or sleep before you climb."'], 'Master Grell');
+          '"You, your pack, your staff — against theirs. Strike the RIVAL down and the rest scatter."',
+          '"Beat the rank above you, take their place. There is no top. There is only UP."'], 'Master Grell');
         continue;
       }
       if (c === 1){
@@ -405,41 +449,107 @@ const Systems = (() => {
         await UI.panelList('THE SOUL LADDER', rows, { footer:'The ladder has no top rung.' });
         continue;
       }
-      // duel
-      const rival = genRival(rank);
-      await UI.say(`"Rank ${rank}. Your opponent: ${rival.name}. Begin!"`, 'Master Grell');
-      const r = await Battle.start({ eParty: rival.party, trainer: rival.name, canCatch:false, canRun:false });
-      if (r.wiped) return afterLoss();
-      if (r.noFight) return;
-      if (r.win){
-        const gold = 120 + rank * 60;
-        G.gold += gold;
-        G.arena.rank++;
-        G.arena.wins++;
-        skillAdd('necromancy', 40 + rank * 5);
-        await UI.say([`${rival.name} bows, defeated. You take their rung.`,
-          `Purse: +${gold}⛁ · You are now Rank ${G.arena.rank}.`], 'Master Grell');
-        save();
-      } else {
-        await UI.say('"Hah! The Ladder keeps what it catches. Come back stronger."', 'Master Grell');
-      }
+      // start the duel
+      const name = `${RIVAL_NAMES[rnd(RIVAL_NAMES.length)]} the ${RIVAL_TITLES[rnd(RIVAL_TITLES.length)]}`;
+      duel = { kind:'ladder', rank, name };
+      await UI.say(`"Rank ${rank}. Your opponent: ${name}. To the pit!"`, 'Master Grell');
+      World.enter('arena', 8, 8);
+      Combat.spawnRivalPack(duel, rank);
+      UI.toast(`DUEL: strike down ${name}! (door = forfeit)`);
       return;
+    }
+  }
+  function arenaExit(){
+    if (duel && duel.kind === 'ladder') UI.toast('You forfeit the duel.');
+    duel = null;
+    Combat.clearHostiles();
+    World.enter('town', 24, 15);
+  }
+  async function rivalDefeated(riv){
+    if (riv.kind === 'ladder'){
+      const gold = 120 + riv.rank * 60;
+      G.gold += gold;
+      G.arena.rank++;
+      G.arena.wins++;
+      skillAdd('necromancy', 40 + riv.rank * 5);
+      duel = null;
+      await UI.say([`${riv.name} bows, defeated, and their pack scatters to dust.`,
+        `Purse: +${gold}⛁ · You are now Rank ${G.arena.rank}.`], 'Master Grell');
+      Combat.clearHostiles();
+      World.enter('town', 24, 15);
+      save();
+    } else {
+      const gold = riv.gold || 150;
+      G.gold += gold;
+      skillAdd('necromancy', 30);
+      UI.toast(`${riv.name} flees into the trees, dropping ${gold}⛁!`);
     }
   }
 
   async function woodsDuel(){
-    const avg = Math.round(G.party.reduce((s,g) => s + g.lvl, 0) / G.party.length);
-    const rival = genRival(Math.max(1, Math.floor(avg / 2)));
-    await UI.say(`"Oi! These are MY hunting grounds," snarls ${rival.name}. "Duel me for them!"`, rival.name);
-    const r = await Battle.start({ eParty: rival.party.slice(0, 2 + rnd(2)), trainer: rival.name, canCatch:false, canRun:false });
+    const avg = Math.max(2, Math.round(G.party.reduce((s,g) => s + g.lvl, 0) / Math.max(1, G.party.length)));
+    const rank = Math.max(1, Math.floor(avg / 2));
+    const name = `${RIVAL_NAMES[rnd(RIVAL_NAMES.length)]} the ${RIVAL_TITLES[rnd(RIVAL_TITLES.length)]}`;
+    await UI.say(`"Oi! These are MY hunting grounds," snarls ${name}. "Have at you!"`, name);
     G.flags.woodsRivalDay = G.time.day;
-    if (r.wiped) return afterLoss();
-    if (r.win){
-      const gold = 80 + avg * 12;
-      G.gold += gold;
-      skillAdd('necromancy', 25 + avg * 2);
-      await UI.say(`${rival.name} flees into the trees, dropping a purse of ${gold}⛁!`);
+    Combat.spawnRivalPack({ kind:'woods', rank, name, gold: 80 + avg * 12 }, rank);
+  }
+
+  // ---------- gear ----------
+  function gearHTML(g, equipped){
+    const affTxt = Object.entries(g.aff).map(([k,v]) => AFFIXES[k].n.replace('#', v)).join(' · ');
+    return `<b style="color:${RARITIES[g.rar].col}">${g.name}</b> <span class="tag">${g.slot}</span>${equipped ? ' <span class="tag" style="color:#6dd86d">WORN</span>' : ''}<br><span class="dim">${affTxt}</span>`;
+  }
+  async function gearMenu(){
+    for(;;){
+      const rows = [];
+      const eq = [];
+      for (const s of ['staff','robe','charm']){
+        const g = G.gear.equip[s];
+        rows.push(g ? { html: gearHTML(g, true) } : { html:`<span class="dim">— empty ${s} slot —</span>`, dim:true });
+        eq.push(g);
+      }
+      const bag = G.gear.bag;
+      for (const g of bag) rows.push({ html: gearHTML(g, false) });
+      const i = await UI.panelList(`GEAR — ${bag.length}/60 in bag`, rows,
+        { footer:'Z on bag gear: equip/salvage · Z on worn gear: unequip · X: back' });
+      if (i < 0) return;
+      if (i < 3){
+        const slot = ['staff','robe','charm'][i];
+        const g = G.gear.equip[slot];
+        if (!g) continue;
+        if (bag.length >= 60){ UI.toast('Gear bag full.'); continue; }
+        G.gear.equip[slot] = null;
+        bag.push(g);
+        UI.toast(`Unequipped ${g.name}.`);
+        continue;
+      }
+      const g = bag[i - 3];
+      const a = await UI.choice(['Equip', `Salvage (+${30 + g.lvl * 8 + g.rar * 60}⛁)`, 'Back']);
+      if (a === 0){
+        const old = G.gear.equip[g.slot];
+        G.gear.equip[g.slot] = g;
+        bag.splice(i - 3, 1);
+        if (old) bag.push(old);
+        UI.toast(`Equipped ${g.name}.`);
+        G.pc.hp = Math.min(G.pc.hp, Combat.pstats().maxhp);
+      } else if (a === 1){
+        G.gold += 30 + g.lvl * 8 + g.rar * 60;
+        bag.splice(i - 3, 1);
+        UI.toast(`Salvaged ${g.name}.`);
+      }
     }
+  }
+
+  async function deedsMenu(){
+    const rows = Object.entries(PLOTS).map(([id, p]) => {
+      const t = plotTier(id);
+      const owned = !!G.houses[id];
+      return { html:`<b>${p.n}</b> <span class="tag">${p.map}</span> ${t ? `<span class="tag" style="color:#6dd86d">${PLOT_TIERS[t].n}</span>` : owned ? '<span class="tag">land only</span>' : `<span class="dim">${p.land}⛁</span>`}<br><span class="dim">${p.buff}</span>`,
+        dim: !owned };
+    });
+    await UI.panelList(manorDone() ? 'THE DEED BOOK' : 'THE DEED BOOK (sealed — finish your manor!)', rows,
+      { footer:'Visit a SALE post in the world to buy and build.' });
   }
 
   // ---------- shop ----------
@@ -447,6 +557,7 @@ const Systems = (() => {
     'seed_blood','seed_grave','seed_moon','seed_pumpkid','seed_mandrake','seed_mystery',
     'worm','glowbait','voidbait','bonerod','abyssrod','plank','stone','ecto',
     'f_chair','f_table','f_rug','f_candle','f_shelf','f_mirror','f_clock','f_gargoyle','f_throne','f_banner','f_plant'];
+  function buyPrice(id){ return Math.ceil(ITEMS[id].price * (1 - 0.05 * plotTier('townhouse'))); }
 
   async function shop(){
     for(;;){
@@ -455,14 +566,14 @@ const Systems = (() => {
       if (c === 0){
         for(;;){
           const stock = SHOP_STOCK.filter(id => !(ITEMS[id].k === 'rod' && Inv.count(id) > 0));
-          const i = await UI.panelList(`SHOPKEEP ODD — your gold: ${G.gold}⛁`, stock.map(id => ({
-            html:`<b>${ITEMS[id].n}</b> — ${ITEMS[id].price}⛁ <span class="dim">(have ${Inv.count(id)})</span><br><span class="dim">${ITEMS[id].d || ''}</span>`,
-            dim: G.gold < ITEMS[id].price,
+          const i = await UI.panelList(`SHOPKEEP ODD — your gold: ${G.gold}⛁${plotTier('townhouse') ? ` (townhouse discount ${5*plotTier('townhouse')}%)` : ''}`, stock.map(id => ({
+            html:`<b>${ITEMS[id].n}</b> — ${buyPrice(id)}⛁ <span class="dim">(have ${Inv.count(id)})</span><br><span class="dim">${ITEMS[id].d || ''}</span>`,
+            dim: G.gold < buyPrice(id),
           })), { footer:'Z: buy one · X: back' });
           if (i < 0) break;
           const id = stock[i];
-          if (G.gold < ITEMS[id].price){ UI.toast('Not enough gold.'); continue; }
-          G.gold -= ITEMS[id].price;
+          if (G.gold < buyPrice(id)){ UI.toast('Not enough gold.'); continue; }
+          G.gold -= buyPrice(id);
           Inv.add(id, 1);
           UI.toast(`Bought ${ITEMS[id].n}.`);
           UI.hud();
@@ -486,20 +597,20 @@ const Systems = (() => {
 
   // ---------- npc talk ----------
   async function witch(){
-    const c = await UI.choice(['Heal my grims', 'Any advice?', 'Goodbye']);
+    const c = await UI.choice(['Heal us, please', 'Any advice?', 'Goodbye']);
     if (c === 0){
-      for (const g of G.party){ g.hp = statsFor(g.sp, g.lvl).maxhp; g.status = null;
-        for (const m of g.moves) m.pp = MOVES[m.id].pp; }
-      await UI.say('Morwen mutters over your jars. Your grims are fully restored, dear.', 'Witch Morwen');
+      healAll();
+      await UI.say('Morwen mutters over you and your jars. All of you are fully restored, dear.', 'Witch Morwen');
       save();
     } else if (c === 1){
       const tips = [
-        'Monster seeds grow into grims! The farming plots are beside your manor — and your Farming level decides how strong they hatch.',
-        'Some fish bite only at night, and the rarest only under a NEW or FULL moon. Sleep in your bed to pass the days.',
-        'The catacombs have no bottom, dear. Every fifth floor a guardian waits — beat it, or better, BIND it.',
-        'Weaken a wild grim and put it to sleep before throwing a jar. Your Necromancy level helps too.',
-        'Restore the manor\'s Study and all your grims learn faster. Restore the Kitchen and you can brew.',
-        'Master Grell\'s Soul Ladder has no top rung. The duelists climb forever, and so can you.',
+        'Your bound grims fight BESIDE you now, dear. Weaken a wild one below a third (watch for the jar mark) and press C to bind it.',
+        'X hurls a hex bolt — it costs Soul, which returns with time. Your staff (Z) costs nothing but courage.',
+        'Monster seeds grow into grims! And your Farming level decides how strong they hatch.',
+        'Some fish bite only at night, the rarest under a NEW or FULL moon. Sleep in a bed to pass the days.',
+        'Finish restoring ALL of Hollow Manor and the deed book is yours — then every SALE post in the valley can become a home with its own power.',
+        'Gear drops from the dead. Staves, robes, charms — eldritch ones carry three blessings.',
+        'The Soul Ladder has no top. The catacombs have no bottom. The valley tests how far you will go in both directions.',
       ];
       await UI.say(tips[rnd(tips.length)], 'Witch Morwen');
     }
@@ -510,12 +621,12 @@ const Systems = (() => {
       Inv.add('oldrod', 1); Inv.add('worm', 5);
       return UI.say(['"New blood! The lake\'s full of drowned things that bite."',
         '"Here — my old rod and some grubs. Face the water and press Z to cast."',
-        '"Level your Fishing and buy my Bone Rod design at the shop. The Abyss Rod... earn that one."'], 'Fisher Eli');
+        '"Fair warning: what you hook comes up ANGRY. Land it, then jar it if you fancy it."'], 'Fisher Eli');
     }
     const tips = [
       '"Phantfin only rise at night. Lanternjaw? New moon, Bone Rod or better."',
       '"They whisper of the MOONSCALE — full moon, Abyss Rod, Fishing 15. A living legend."',
-      '"Better bait, better odds on the strange ones. The witch\'s cauldron brews Void Bait."',
+      '"A Lakeside Pier of your own makes the rare ones bite. A Shore Cottage makes them easier to jar."',
       '"Your Fishing level widens the catch-window. Even an old eel like me started clumsy."',
     ];
     return UI.say(tips[rnd(tips.length)], 'Fisher Eli');
@@ -526,7 +637,7 @@ const Systems = (() => {
       Inv.add('graverune', 2);
       return UI.say(['"That hole? Goes down forever, far as I ever dug."',
         '"Take these Grave Runes — use one from your satchel to climb out in a pinch."',
-        '"Chests get richer the deeper you go. So do the teeth. Delving\'s a skill like any other."'], 'Gravedigger');
+        '"Every fifth floor something big guards the stairs. Slay it... or jar it, if you\'ve the nerve."'], 'Gravedigger');
     }
     return UI.say(`"Deepest you've gone is floor ${G.cata.maxFloor || 0}. The dark remembers."`, 'Gravedigger');
   }
@@ -534,17 +645,16 @@ const Systems = (() => {
   // ---------- pause menu ----------
   async function pauseMenu(){
     for(;;){
-      const c = await UI.choice(['Grims', 'Satchel', 'Skills', 'Grimdex', 'Save', 'Close']);
-      if (c === -1 || c === 5) return;
+      const c = await UI.choice(['Pack', 'Satchel', 'Gear', 'Skills', 'Deeds', 'Grimdex', 'Save', 'Close']);
+      if (c === -1 || c === 7) return;
       if (c === 0){
         for(;;){
-          const i = await UI.party();
+          const i = await UI.party('YOUR PACK');
           if (i < 0) break;
           const g = G.party[i];
-          const a = await UI.choice(['Summary', 'Move to front', 'Rename', 'Back']);
+          const a = await UI.choice(['Summary', 'Rename', 'Back']);
           if (a === 0) await UI.grimSummary(g);
-          else if (a === 1){ G.party.splice(i, 1); G.party.unshift(g); UI.toast(`${g.nick} leads the way.`); }
-          else if (a === 2){
+          else if (a === 1){
             const nm = prompt('New nickname:', g.nick);
             if (nm && nm.trim()) g.nick = nm.trim().slice(0, 14);
           }
@@ -555,11 +665,21 @@ const Systems = (() => {
           if (!id) break;
           const it = ITEMS[id];
           if (['heal','revive','cure'].includes(it.k)){
-            const ti = await UI.party('USE ON WHICH GRIM?');
-            if (ti < 0) continue;
-            const msg = useItemOn(id, G.party[ti]);
-            if (msg){ Inv.take(id, 1); UI.toast(msg); }
-            else UI.toast('It would have no effect.');
+            const who = await UI.choice(['Use on myself', 'Use on a grim', 'Back']);
+            if (who === 0){
+              const ps = Combat.pstats();
+              if (it.k === 'heal' && G.pc.hp < ps.maxhp){
+                Inv.take(id, 1);
+                G.pc.hp = Math.min(ps.maxhp, G.pc.hp + it.amt);
+                UI.toast(`You recover ${it.amt} life.`);
+              } else UI.toast('No effect.');
+            } else if (who === 1){
+              const ti = await UI.party('USE ON WHICH GRIM?');
+              if (ti < 0) continue;
+              const msg = useItemOn(id, G.party[ti]);
+              if (msg){ Inv.take(id, 1); delete G.party[ti].downT; Combat.syncMinions(); UI.toast(msg); }
+              else UI.toast('It would have no effect.');
+            }
           }
           else if (it.k === 'charm'){
             if (World.map === 'cata'){
@@ -572,27 +692,29 @@ const Systems = (() => {
             UI.toast('It only works in the catacombs.');
           }
           else if (it.k === 'seed') UI.toast('Plant it at a soil plot (face it, press Z).');
-          else if (it.k === 'furn') UI.toast('Place it on a free floor tile in your manor.');
+          else if (it.k === 'furn') UI.toast('Place it on a free floor tile in any of your houses.');
           else if (it.k === 'rod') UI.toast('Face water and press Z to fish.');
           else UI.toast(it.d || '...');
         }
-      } else if (c === 2){
+      } else if (c === 2) await gearMenu();
+      else if (c === 3){
         await UI.panelList('SKILLS', Object.entries(SKILLS).map(([k, s]) => {
           const lvl = skillLvl(k), xp = G.skills[k] || 0;
           const cur = skillXpFor(lvl), next = skillXpFor(lvl + 1);
           const pct = Math.min(100, Math.round((xp - cur) / (next - cur) * 100));
           return { html:`<b style="color:${s.col}">${s.icon} ${s.n} — Lv.${lvl}</b> <span class="dim">${xp - cur}/${next - cur} xp (${pct}%)</span><br><span class="dim">${s.d}</span>` };
         }), { footer:'Skills have NO level cap. Everything scales forever.' });
-      } else if (c === 3){
+      } else if (c === 4) await deedsMenu();
+      else if (c === 5){
         const keys = Object.keys(DEX);
         const caught = keys.filter(k => G.dex[k] === 2).length;
         await UI.panelList(`GRIMDEX — ${caught}/${keys.length} bound`, keys.map(k => {
           const st = G.dex[k] || 0;
           if (!st) return { html:`<span class="dim">??? — unseen</span>`, dim:true };
-          return { spr: st ? SPR.creature(k) : null,
+          return { spr: SPR.creature(k),
             html:`<b>${DEX[k].n}</b> ${st === 2 ? '<span class="tag" style="color:#6dd86d">BOUND</span>' : '<span class="tag">seen</span>'}<br><span class="dim">${st === 2 ? DEX[k].desc : '...'}</span>` };
         }), { footer:'Bind them all... if the valley lets you.' });
-      } else if (c === 4){
+      } else if (c === 6){
         save();
         UI.toast('Game saved.');
       }
@@ -600,10 +722,11 @@ const Systems = (() => {
   }
 
   // ---------- save / load ----------
-  const SAVE_KEY = 'grimvale_save_v1';
+  const SAVE_KEY = 'grimvale_save_v2';
   function save(){
     if (!G.started) return;
-    const pos = World.map === 'cata' ? { map:'town', x:4, y:7 } : { map:World.map, x:World.px, y:World.py };
+    const pos = (World.map === 'cata' || World.map === 'arena' || World.map === 'house')
+      ? { map:'town', x:17, y:8 } : { map:World.map, x:World.px, y:World.py };
     localStorage.setItem(SAVE_KEY, JSON.stringify({ ...G, pos }));
   }
   function load(){
@@ -613,8 +736,9 @@ const Systems = (() => {
     } catch { return null; }
   }
 
-  return { skillLvl, skillAdd, wildEncounter, afterLoss, cropStage, plot, fish,
-    restore, placeFurniture, sleep, storage, cauldron, altar,
-    enterCata, descend, ascend, chest, cataBoss, arena, woodsDuel,
+  return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish,
+    restore, placeFurniture, sleep, storage, cauldron, altar, manorDone,
+    enterCata, descend, ascend, chest, arena, arenaExit, rivalDefeated, woodsDuel,
+    plotMenu, deedsMenu, gearMenu,
     shop, witch, fisherTalk, diggerTalk, pauseMenu, save, load };
 })();

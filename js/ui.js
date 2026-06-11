@@ -26,12 +26,18 @@ function normKey(e){
 }
 document.addEventListener('keydown', e => {
   const k = normKey(e);
-  if (!k) return;
-  e.preventDefault();
-  Input.held[k] = true;
+  if (k){
+    e.preventDefault();
+    Input.held[k] = true;
+  }
   const h = Input.top();
-  if (h){ h(k); return; }
-  if (typeof World !== 'undefined' && World.active) World.key(k);
+  if (h){ if (k) h(k); return; }
+  // no modal: world receives the raw key (real-time controls)
+  if (typeof World !== 'undefined' && World.active){
+    if ('zZxXkKcClL'.includes(e.key) || e.key === 'Escape' || e.key === 'Enter') e.preventDefault();
+    if (k === 'up' || k === 'down' || k === 'left' || k === 'right') World.face(k);
+    World.rawKey(e.key);
+  }
 });
 document.addEventListener('keyup', e => {
   const k = normKey(e);
@@ -113,11 +119,19 @@ const UI = (() => {
   function hud(){
     if (!G.started) return;
     $('hud').classList.remove('hidden');
+    $('vitals').classList.remove('hidden');
     $('hud-gold').textContent = '⛁ ' + G.gold;
     const h = Math.floor(G.time.min/60), m = Math.floor(G.time.min%60);
     $('hud-time').textContent = `Day ${G.time.day} — ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
     $('hud-moon').textContent = MOONS[moonPhase()];
     $('hud-loc').textContent = World.locName();
+    // vitals
+    const ps = Combat.pstats();
+    $('hp-fill').style.width = Math.max(0, G.pc.hp / ps.maxhp * 100) + '%';
+    $('hp-txt').textContent = `${Math.ceil(G.pc.hp)}/${ps.maxhp}`;
+    $('soul-fill').style.width = Math.max(0, G.pc.soul / ps.maxsoul * 100) + '%';
+    $('soul-txt').textContent = `${Math.floor(G.pc.soul)}/${ps.maxsoul}`;
+    $('pack-txt').textContent = `☠ ${G.party.filter(g => g.hp > 0).length}/${G.party.length} pack (cap ${Combat.minionCap()})`;
   }
 
   // ----- generic list panel -----
@@ -183,12 +197,15 @@ const UI = (() => {
 
   async function grimSummary(g){
     const st = statsFor(g.sp, g.lvl), d = DEX[g.sp];
-    const mv = g.moves.map(m => `${MOVES[m.id].n} <span class="dim">(${TYPES[MOVES[m.id].t].n}${MOVES[m.id].p?' '+MOVES[m.id].p:''}, ${m.pp}/${MOVES[m.id].pp}pp)</span>`).join('<br>');
     const next = xpForLevel(g.lvl+1) - g.xp;
+    const arch = ARCH[g.sp];
+    const archD = { chaser:'melee — charges and bites', wisp:'swift melee — darts erratically',
+      spitter:'ranged — keeps distance, spits bolts', tank:'bruiser — slow, heavy, durable',
+      caster:'artillery — fires 3-bolt volleys' }[arch];
     await panelList(`${g.nick} — ${d.n}`, [
       { spr:SPR.creature(g.sp), html: grimRowHTML(g) },
       { html: `ATK ${st.atk} · DEF ${st.def} · SPD ${st.spd} · SPC ${st.spc}<br><span class="dim">XP ${g.xp} (${next} to next level)</span>` },
-      { html: mv },
+      { html: `<b>Fighting style:</b> ${arch.toUpperCase()} <span class="dim">(${archD})</span>` },
       { html: `<span class="dim">${d.desc}</span>` },
     ], { footer: 'X: back' });
   }

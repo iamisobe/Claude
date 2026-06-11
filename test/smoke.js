@@ -34,7 +34,7 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
-const files = ['data.js','sprites.js','ui.js','world.js','battle.js','systems.js','main.js'];
+const files = ['data.js','sprites.js','ui.js','combat.js','world.js','systems.js','main.js'];
 for (const f of files){
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
   vm.runInContext(src, sandbox, { filename: f });
@@ -148,6 +148,34 @@ vm.runInContext(`(${function tests(check){
     check(`cata trial ${trial} (B${floor}): d reachable from u`, open.has(d.join(',')));
     if (c.boss) check(`cata trial ${trial}: boss on open tile`, open.has(c.boss.join(',')));
   }
+
+  // ---- real-time combat data ----
+  for (const k of Object.keys(DEX))
+    check(`arch ${k}: defined`, !!ARCH[k] && !!ARCH_STATS[ARCH[k]], ARCH[k]);
+  // gear rolls are sane
+  for (let i = 0; i < 40; i++){
+    const g = rollGear(1 + i % 30);
+    check(`gear roll ${i}: valid`, ['staff','robe','charm'].includes(g.slot)
+      && Object.keys(g.aff).length >= 1 && Object.keys(g.aff).every(k => AFFIXES[k])
+      && g.rar >= 0 && g.rar <= 2, JSON.stringify(g));
+  }
+  // ---- plots ----
+  const woods2 = genWoods();
+  const mapRows = { town: TOWN_ROWS, woods: woods2 };
+  const SOLID2 = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s']);
+  for (const [id, p] of Object.entries(PLOTS)){
+    check(`plot ${id}: map valid`, !!mapRows[p.map]);
+    const rows = mapRows[p.map];
+    const ok = t => t && !SOLID2.has(t);
+    check(`plot ${id}: post tile open`, ok(rows[p.y] && rows[p.y][p.x]), rows[p.y] && rows[p.y][p.x]);
+    check(`plot ${id}: house body open`, ok(rows[p.y-1][p.x]) && ok(rows[p.y-1][p.x-1]),
+      rows[p.y-1][p.x] + rows[p.y-1][p.x-1]);
+    check(`plot ${id}: approach tile open`, ok(rows[p.y+1] && rows[p.y+1][p.x]));
+  }
+  for (const t of PLOT_TIERS.slice(1)){
+    check(`tier ${t.n}: cost items exist`, Object.keys(t.cost).every(k => k === 'gold' || ITEMS[k]));
+  }
+  check('arena map uniform', ARENA_ROWS.every(r => r.length === ARENA_ROWS[0].length));
 
   // ---- mechanics math ----
   for (const k of Object.keys(DEX)){
