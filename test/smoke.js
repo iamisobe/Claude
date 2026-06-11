@@ -1,0 +1,172 @@
+// Headless smoke test: loads every game script with DOM stubs and
+// validates data integrity, map geometry, and core mechanics.
+// Run: node test/smoke.js
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+// --- universal stub: callable, chainable, property-tolerant ---
+function anyStub(){
+  const f = function(){ return p; };
+  const p = new Proxy(f, {
+    get(t, k){
+      if (k === Symbol.toPrimitive) return () => 0;
+      if (k === 'length') return 0;
+      if (k === Symbol.iterator) return function*(){};
+      return p;
+    },
+    set(){ return true; },
+    apply(){ return p; },
+  });
+  return p;
+}
+const stub = anyStub();
+
+const sandbox = {
+  console, Math, JSON, Object, Array, Promise, Number, String, Boolean, Set, Map,
+  setTimeout, clearTimeout, parseFloat, parseInt,
+  document: stub, window: stub, performance: { now: () => 0 },
+  requestAnimationFrame: () => 0, cancelAnimationFrame: () => 0,
+  localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  prompt: () => null,
+};
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+
+const files = ['data.js','sprites.js','ui.js','world.js','battle.js','systems.js','main.js'];
+for (const f of files){
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
+  vm.runInContext(src, sandbox, { filename: f });
+}
+
+let fails = 0;
+function check(name, cond, extra){
+  if (cond) console.log('  ok  ' + name);
+  else { console.log('  FAIL ' + name + (extra ? ' — ' + extra : '')); fails++; }
+}
+
+vm.runInContext(`(${function tests(check){
+  // ---- species ----
+  for (const [k, s] of Object.entries(DEX)){
+    check(`dex ${k}: 16 art rows`, s.art.length === 16, 'rows=' + s.art.length);
+    const maxW = s.sym ? 8 : 16;
+    check(`dex ${k}: row widths <= ${maxW}`, s.art.every(r => r.length <= maxW),
+      s.art.map(r=>r.length).join(','));
+    check(`dex ${k}: base stats`, s.base.length === 5 && s.base.every(b => b > 0));
+    check(`dex ${k}: types valid`, s.ty.every(t => TYPES[t]));
+    check(`dex ${k}: moves exist`, s.mv.every(([l,m]) => MOVES[m]), JSON.stringify(s.mv));
+    check(`dex ${k}: has lvl-1 move`, s.mv.some(([l]) => l === 1));
+    if (s.ev) check(`dex ${k}: evolves to real species`, !!DEX[s.ev.to]);
+  }
+  // ---- moves reference valid types ----
+  for (const [k, m] of Object.entries(MOVES))
+    check(`move ${k}: type valid`, !!TYPES[m.t]);
+  // ---- items / crops / brews / tables ----
+  for (const [k, c] of Object.entries(CROPS)){
+    if (c.item) check(`crop ${k}: item exists`, !!ITEMS[c.item]);
+    if (c.hatch){
+      const hs = Array.isArray(c.hatch) ? c.hatch : [c.hatch];
+      check(`crop ${k}: hatch species exist`, hs.every(h => DEX[h]));
+    }
+  }
+  for (const b of BREWS){
+    check(`brew ${b.out}: output item exists`, !!ITEMS[b.out]);
+    check(`brew ${b.out}: inputs exist`, Object.keys(b.ins).every(i => ITEMS[i]));
+    check(`brew ${b.out}: has skill gate`, SKILL_REQ.brew[b.out] >= 1);
+  }
+  for (const e of FISH_TABLE) check(`fish ${e.sp}: species exists`, !!DEX[e.sp]);
+  for (const [zone, list] of Object.entries(ENCOUNTERS))
+    check(`encounters ${zone}: species exist`, list.every(e => DEX[e.sp]));
+  check('rival pool species exist', RIVAL_POOL.every(s => DEX[s]));
+  for (const id of Object.entries(ITEMS).filter(([,i]) => i.k === 'seed').map(([k]) => k))
+    check(`seed item ${id}: crop exists`, !!CROPS[ITEMS[id].crop]);
+  check('seed skill gates cover all crops', Object.keys(CROPS).every(c => SKILL_REQ.seed[c] >= 1));
+
+  // ---- maps ----
+  check('town rows uniform width 36', TOWN_ROWS.every(r => r.length === 36),
+    TOWN_ROWS.map(r=>r.length).join(','));
+  check('town has 28 rows', TOWN_ROWS.length === 28);
+  check('manor rows uniform width 26', MANOR_ROWS.every(r => r.length === 26),
+    MANOR_ROWS.map(r=>r.length).join(','));
+  check('manor has 18 rows', MANOR_ROWS.length === 18);
+  const woods = genWoods();
+  check('woods rows uniform width 30', woods.every(r => r.length === 30));
+  check('woods exit is path', woods[0][15] === 'p');
+
+  // every map char has a sprite mapping
+  const chars = new Set();
+  for (const rows of [TOWN_ROWS, MANOR_ROWS, woods]) for (const r of rows) for (const c of r) chars.add(c);
+  check('all map chars have sprites', [...chars].every(c => TILE_SPR[c]),
+    [...chars].filter(c => !TILE_SPR[c]).join(''));
+
+  // key tiles
+  const tt = (x,y) => TOWN_ROWS[y][x];
+  check('manor door at town (17,5)', tt(17,5) === 'D');
+  check('shop door at town (9,14)', tt(9,14) === 'D');
+  check('arena door at town (24,14)', tt(24,14) === 'D');
+  check('witch door at town (4,20)', tt(4,20) === 'D');
+  check('catacomb hole at town (4,6)', tt(4,6) === 'h');
+  check('south gate at town (17,27)(18,27)', tt(17,27) === 'p' && tt(18,27) === 'p');
+  check('player start (17,8) walkable', tt(17,8) === 'p');
+  check('cata exit spot (4,7) walkable', tt(4,7) === 'g');
+  check('lake water present', tt(26,19) === 'w');
+  check('farm soil at (27,3)', tt(27,3) === 's');
+  const mt = (x,y) => MANOR_ROWS[y][x];
+  check('manor exit door (13,17)', mt(13,17) === 'D');
+  check('manor entry spot (13,16) floor', mt(13,16) === 'F');
+  check('bed (10,8) / box (12,8) / cauldron (3,8)', mt(10,8) === 'b' && mt(12,8) === 'x' && mt(3,8) === 'k');
+  check('altar (20,2) / crypt chest (22,2)', mt(20,2) === 'A' && mt(22,2) === 'C');
+  check('conservatory plots', mt(3,2) === 's' && mt(5,2) === 's' && mt(7,2) === 's');
+  for (const [key, room] of Object.entries(RESTORE_AT)){
+    const [x,y] = key.split(',').map(Number);
+    check(`rubble for ${room} at (${x},${y})`, mt(x,y) === 'R');
+  }
+  // NPC tiles walkable-adjacent (they stand on non-solid ground)
+  for (const [x,y] of [[6,21],[11,15],[25,15],[28,17],[7,8]])
+    check(`town npc spot (${x},${y}) not solid terrain`, !'#wfGBrWRCbkxAih'.includes(tt(x,y)), tt(x,y));
+
+  // ---- catacomb generation: stairs always connected ----
+  for (let trial = 0; trial < 30; trial++){
+    const floor = 1 + trial % 12;
+    const c = genCata(floor === 5 ? 5 : floor);
+    const rows = c.rows;
+    let u = null, d = null;
+    rows.forEach((r, y) => { for (let x = 0; x < r.length; x++){
+      if (r[x] === 'u') u = [x,y]; if (r[x] === 'd') d = [x,y]; } });
+    if (!u || !d){ check(`cata trial ${trial}: stairs exist`, false); continue; }
+    // flood fill
+    const open = new Set(); const q = [u];
+    open.add(u.join(','));
+    while (q.length){
+      const [x,y] = q.pop();
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = x+dx, ny = y+dy, ch = rows[ny] && rows[ny][nx];
+        if (ch && ch !== 'X' && !open.has(nx+','+ny)){ open.add(nx+','+ny); q.push([nx,ny]); }
+      }
+    }
+    check(`cata trial ${trial} (B${floor}): d reachable from u`, open.has(d.join(',')));
+    if (c.boss) check(`cata trial ${trial}: boss on open tile`, open.has(c.boss.join(',')));
+  }
+
+  // ---- mechanics math ----
+  for (const k of Object.keys(DEX)){
+    const g5 = makeGrim(k, 5), g40 = makeGrim(k, 40);
+    check(`makeGrim ${k}: moves 1-4`, g5.moves.length >= 1 && g5.moves.length <= 4 && g40.moves.length <= 4);
+    check(`makeGrim ${k}: hp positive`, g5.hp > 0 && g40.hp > g5.hp);
+  }
+  check('typeMult dual', typeMult('EMBER', ['FLORA','FROST']) === 4);
+  check('typeMult resist', typeMult('EMBER', ['DROWNED']) === 0.5);
+  check('typeMult neutral NONE', typeMult('NONE', ['SPIRIT','BONE']) === 1);
+  check('skill level curve starts at 1', skillLevel(0) === 1 && skillXpFor(1) === 0);
+  check('skill levels are endless & monotonic',
+    skillLevel(skillXpFor(50)) === 50 && skillXpFor(51) > skillXpFor(50));
+  check('xp curve', xpForLevel(10) === 1000);
+  const w = pickW([{w:1, id:'a'}]); check('pickW returns entry', w.id === 'a');
+  // moon fish availability: at least one fish at rod 1, day, any moon
+  const basePool = FISH_TABLE.filter(e => e.rod <= 1 && !e.night && !e.moon);
+  check('rod-1 daytime fish exists', basePool.length >= 1);
+}})`, sandbox)(check);
+
+console.log(fails ? `\n${fails} FAILURES` : '\nAll smoke tests passed.');
+process.exit(fails ? 1 : 0);

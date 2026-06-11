@@ -1,0 +1,259 @@
+// ============================================================
+// GRIMVALE — UI: input routing, dialogs, choices, panels, HUD.
+// ============================================================
+'use strict';
+
+const $ = id => document.getElementById(id);
+
+// ---------- input ----------
+const Input = {
+  stack: [],          // active modal handlers; top receives normalized keys
+  held: {},           // for world movement
+  push(h){ this.stack.push(h); },
+  pop(h){ const i = this.stack.lastIndexOf(h); if (i >= 0) this.stack.splice(i,1); },
+  top(){ return this.stack[this.stack.length-1]; },
+};
+function normKey(e){
+  switch (e.key){
+    case 'ArrowUp': case 'w': case 'W': return 'up';
+    case 'ArrowDown': case 's': case 'S': return 'down';
+    case 'ArrowLeft': case 'a': case 'A': return 'left';
+    case 'ArrowRight': case 'd': case 'D': return 'right';
+    case 'z': case 'Z': case 'Enter': case ' ': return 'ok';
+    case 'x': case 'X': case 'Escape': return 'no';
+  }
+  return null;
+}
+document.addEventListener('keydown', e => {
+  const k = normKey(e);
+  if (!k) return;
+  e.preventDefault();
+  Input.held[k] = true;
+  const h = Input.top();
+  if (h){ h(k); return; }
+  if (typeof World !== 'undefined' && World.active) World.key(k);
+});
+document.addEventListener('keyup', e => {
+  const k = normKey(e);
+  if (k) Input.held[k] = false;
+});
+
+// ---------- UI module ----------
+const UI = (() => {
+
+  // ----- dialog -----
+  function say(lines, name){
+    if (typeof lines === 'string') lines = [lines];
+    const box = $('dialog'), txt = $('dialog-text'), nm = $('dialog-name');
+    nm.textContent = name || '';
+    nm.style.display = name ? '' : 'none';
+    box.classList.remove('hidden');
+    let i = 0;
+    txt.textContent = lines[0];
+    return new Promise(res => {
+      const h = k => {
+        if (k !== 'ok' && k !== 'no') return;
+        i++;
+        if (i < lines.length){ txt.textContent = lines[i]; return; }
+        box.classList.add('hidden');
+        Input.pop(h);
+        res();
+      };
+      Input.push(h);
+      box.onclick = () => h('ok');
+    });
+  }
+
+  // ----- choice: resolves index, or -1 if cancelable and cancelled -----
+  function choice(options, opts = {}){
+    const box = $('choice');
+    box.innerHTML = '';
+    let sel = 0;
+    const els = options.map((o, i) => {
+      const d = document.createElement('div');
+      d.className = 'opt'; d.textContent = o;
+      d.onclick = () => { sel = i; done(i); };
+      box.appendChild(d);
+      return d;
+    });
+    function paint(){ els.forEach((e,i)=>e.classList.toggle('sel', i===sel)); els[sel].scrollIntoView({block:'nearest'}); }
+    paint();
+    box.classList.remove('hidden');
+    let resolve;
+    function done(v){ box.classList.add('hidden'); Input.pop(h); resolve(v); }
+    const h = k => {
+      if (k === 'up'){ sel = (sel+options.length-1)%options.length; paint(); }
+      else if (k === 'down'){ sel = (sel+1)%options.length; paint(); }
+      else if (k === 'ok') done(sel);
+      else if (k === 'no' && opts.cancelable !== false) done(-1);
+    };
+    Input.push(h);
+    return new Promise(r => resolve = r);
+  }
+
+  async function confirm(prompt, name){
+    await say(prompt, name);
+    return (await choice(['Yes','No'])) === 0;
+  }
+
+  // ----- toast -----
+  let toastT = null;
+  function toast(msg){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(toastT);
+    toastT = setTimeout(()=>t.classList.add('hidden'), 2200);
+  }
+
+  // ----- HUD -----
+  const MOONS = ['🌑 New','🌒 Waxing','🌕 Full','🌘 Waning'];
+  function moonPhase(){ return G.time.day % 4; } // 0 new, 2 full
+  function isNight(){ const h = Math.floor(G.time.min/60); return h >= 20 || h < 6; }
+  function hud(){
+    if (!G.started) return;
+    $('hud').classList.remove('hidden');
+    $('hud-gold').textContent = '⛁ ' + G.gold;
+    const h = Math.floor(G.time.min/60), m = Math.floor(G.time.min%60);
+    $('hud-time').textContent = `Day ${G.time.day} — ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    $('hud-moon').textContent = MOONS[moonPhase()];
+    $('hud-loc').textContent = World.locName();
+  }
+
+  // ----- generic list panel -----
+  // items: [{spr:canvas|null, html:string, dim:bool}] -> resolves index or -1
+  function panelList(title, items, opts = {}){
+    const p = $('panel');
+    p.innerHTML = `<h2>${title}</h2>`;
+    let sel = 0;
+    const rows = items.map((it, i) => {
+      const r = document.createElement('div');
+      r.className = 'row';
+      if (it.spr){
+        const c = document.createElement('canvas');
+        c.width = 16; c.height = 16;
+        c.getContext('2d').drawImage(it.spr, 0, 0);
+        r.appendChild(c);
+      }
+      const d = document.createElement('div');
+      d.className = 'grow'; d.innerHTML = it.html;
+      r.appendChild(d);
+      if (it.dim) r.style.opacity = .45;
+      r.onclick = () => { sel = i; done(i); };
+      p.appendChild(r);
+      return r;
+    });
+    if (!items.length) p.insertAdjacentHTML('beforeend', '<div class="panel-foot">— nothing here —</div>');
+    if (opts.footer) p.insertAdjacentHTML('beforeend', `<div class="panel-foot">${opts.footer}</div>`);
+    function paint(){ rows.forEach((r,i)=>r.classList.toggle('sel', i===sel)); rows[sel]?.scrollIntoView({block:'nearest'}); }
+    paint();
+    p.classList.remove('hidden');
+    let resolve;
+    function done(v){ p.classList.add('hidden'); Input.pop(h); resolve(v); }
+    const h = k => {
+      if (!rows.length){ if (k==='no'||k==='ok') done(-1); return; }
+      if (k === 'up'){ sel = (sel+rows.length-1)%rows.length; paint(); }
+      else if (k === 'down'){ sel = (sel+1)%rows.length; paint(); }
+      else if (k === 'ok') done(sel);
+      else if (k === 'no') done(-1);
+    };
+    Input.push(h);
+    return new Promise(r => resolve = r);
+  }
+
+  function hpbarHTML(g){
+    const st = statsFor(g.sp, g.lvl);
+    const pct = Math.max(0, g.hp/st.maxhp);
+    const cls = pct > .5 ? '' : pct > .2 ? ' mid' : ' low';
+    return `<div class="hpbar${cls}"><div style="width:${pct*100}%"></div></div>`;
+  }
+  function grimRowHTML(g){
+    const st = statsFor(g.sp, g.lvl);
+    const types = DEX[g.sp].ty.map(t=>`<span class="tag" style="color:${TYPES[t].col}">${TYPES[t].n}</span>`).join(' ');
+    const status = g.status ? ` <span class="tag" style="color:#e85d5d">${g.status.toUpperCase()}</span>` : '';
+    return `<b>${g.nick}</b> <span class="dim">Lv.${g.lvl}</span> ${types}${status}<br>
+      ${hpbarHTML(g)} <span class="dim">${Math.max(0,g.hp)}/${st.maxhp} HP</span>`;
+  }
+
+  // ----- party panel: resolves index of chosen grim or -1 -----
+  function party(title = 'YOUR GRIMS'){
+    return panelList(title, G.party.map(g => ({ spr: SPR.creature(g.sp), html: grimRowHTML(g) })),
+      { footer: 'Z: select · X: back' });
+  }
+
+  async function grimSummary(g){
+    const st = statsFor(g.sp, g.lvl), d = DEX[g.sp];
+    const mv = g.moves.map(m => `${MOVES[m.id].n} <span class="dim">(${TYPES[MOVES[m.id].t].n}${MOVES[m.id].p?' '+MOVES[m.id].p:''}, ${m.pp}/${MOVES[m.id].pp}pp)</span>`).join('<br>');
+    const next = xpForLevel(g.lvl+1) - g.xp;
+    await panelList(`${g.nick} — ${d.n}`, [
+      { spr:SPR.creature(g.sp), html: grimRowHTML(g) },
+      { html: `ATK ${st.atk} · DEF ${st.def} · SPD ${st.spd} · SPC ${st.spc}<br><span class="dim">XP ${g.xp} (${next} to next level)</span>` },
+      { html: mv },
+      { html: `<span class="dim">${d.desc}</span>` },
+    ], { footer: 'X: back' });
+  }
+
+  // ----- bag -----
+  function bagEntries(filter){
+    return Object.entries(G.bag)
+      .filter(([id, n]) => n > 0 && (!filter || filter(ITEMS[id], id)))
+      .map(([id, n]) => ({ id, n }));
+  }
+  // resolves itemId or null
+  async function pickItem(filter, title = 'SATCHEL'){
+    const es = bagEntries(filter);
+    const i = await panelList(title, es.map(e => ({
+      html: `<b>${ITEMS[e.id].n}</b> ×${e.n}<br><span class="dim">${ITEMS[e.id].d || ''}</span>`
+    })), { footer: 'Z: select · X: back' });
+    return i >= 0 ? es[i].id : null;
+  }
+
+  return { say, choice, confirm, toast, hud, panelList, party, grimSummary,
+           pickItem, bagEntries, hpbarHTML, grimRowHTML, moonPhase, isNight };
+})();
+
+// ---------- inventory ----------
+const Inv = {
+  add(id, n = 1){ G.bag[id] = (G.bag[id] || 0) + n; },
+  take(id, n = 1){
+    if ((G.bag[id] || 0) < n) return false;
+    G.bag[id] -= n;
+    if (G.bag[id] <= 0) delete G.bag[id];
+    return true;
+  },
+  count(id){ return G.bag[id] || 0; },
+  bestRod(){
+    let best = 0;
+    for (const id in G.bag) if (ITEMS[id].k === 'rod') best = Math.max(best, ITEMS[id].tier);
+    return best;
+  },
+  bestBait(){
+    let best = null;
+    for (const id in G.bag)
+      if (ITEMS[id].k === 'bait' && G.bag[id] > 0 && (!best || ITEMS[id].tier > ITEMS[best].tier)) best = id;
+    return best;
+  },
+};
+
+// use a heal/revive/cure item on a grim. returns message or null (no effect)
+function useItemOn(itemId, g){
+  const it = ITEMS[itemId];
+  const st = statsFor(g.sp, g.lvl);
+  if (it.k === 'heal'){
+    if (g.hp <= 0 || g.hp >= st.maxhp) return null;
+    const before = g.hp;
+    g.hp = Math.min(st.maxhp, g.hp + it.amt);
+    return `${g.nick} recovered ${g.hp - before} HP!`;
+  }
+  if (it.k === 'revive'){
+    if (g.hp > 0) return null;
+    g.hp = Math.floor(st.maxhp/2); g.status = null;
+    return `${g.nick} drew a second breath!`;
+  }
+  if (it.k === 'cure'){
+    if (!g.status) return null;
+    g.status = null;
+    return `${g.nick} was cleansed!`;
+  }
+  return null;
+}

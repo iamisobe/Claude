@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRIMVALE — Necromancer's Almanac</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="world" width="720" height="528"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <span id="hud-gold">⛁ 0</span>
+    <span id="hud-time">Day 1 — 08:00</span>
+    <span id="hud-moon">🌑</span>
+    <span id="hud-loc">Grimvale</span>
+  </div>
+
+  <!-- Title screen -->
+  <div id="title">
+    <h1>GRIMVALE</h1>
+    <p class="subtitle">a necromancer's almanac</p>
+    <div class="title-menu">
+      <button id="btn-new">NEW GAME</button>
+      <button id="btn-continue">CONTINUE</button>
+    </div>
+    <p class="hint">Move: Arrows / WASD &nbsp;·&nbsp; Confirm: Z / Enter / Space &nbsp;·&nbsp; Menu/Cancel: X / Esc</p>
+  </div>
+
+  <!-- Dialog box -->
+  <div id="dialog" class="hidden">
+    <div id="dialog-name"></div>
+    <div id="dialog-text"></div>
+    <div id="dialog-next">▼</div>
+  </div>
+
+  <!-- Choice box -->
+  <div id="choice" class="hidden"></div>
+
+  <!-- Generic menu panel (party, bag, shop, box...) -->
+  <div id="panel" class="hidden"></div>
+
+  <!-- Pause menu -->
+  <div id="pause" class="hidden"></div>
+
+  <!-- Battle screen -->
+  <div id="battle" class="hidden">
+    <div id="b-enemy" class="b-side">
+      <div class="b-info" id="b-enemy-info"></div>
+      <canvas id="b-enemy-spr" width="96" height="96"></canvas>
+    </div>
+    <div id="b-player" class="b-side">
+      <canvas id="b-player-spr" width="96" height="96"></canvas>
+      <div class="b-info" id="b-player-info"></div>
+    </div>
+    <div id="b-log"></div>
+    <div id="b-actions"></div>
+  </div>
+
+  <!-- Fishing minigame -->
+  <div id="fishing" class="hidden">
+    <div id="fish-title">~ cast into the cursed water ~</div>
+    <div id="fish-track"><div id="fish-zone"></div><div id="fish-marker"></div></div>
+    <div id="fish-hint">press [Z] when the bobber is in the green!</div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+</div>
+<script src="js/data.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/world.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/systems.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
