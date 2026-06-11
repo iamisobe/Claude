@@ -170,3 +170,7 @@ button:disabled { opacity:.35; cursor:default; }
 #t-jar  { right:96px; bottom:0; }
 #t-a    { right:8px;  bottom:18px; }
 .menu { right:14px; top:36px; width:46px; height:38px; font-size:20px; }
+
+/* on touch layouts, move vitals clear of the d-pad */
+body.touch-on #vitals { left:186px; bottom:12px; }
+body.touch-on #keys-hint { display:none; }

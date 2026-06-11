@@ -54,6 +54,7 @@ function initTouch(){
   const touchable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || coarse;
   if (!touchable) return;                 // desktop: leave hidden, keyboard only
   wrap.classList.remove('hidden');
+  document.body.classList.add('touch-on');
   for (const btn of wrap.querySelectorAll('.tbtn')){
     const key = btn.dataset.key;
     const isDir = key.startsWith('Arrow');
