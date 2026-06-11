@@ -9,9 +9,12 @@ const $ = id => document.getElementById(id);
 const Input = {
   stack: [],          // active modal handlers; top receives normalized keys
   held: {},           // for world movement
-  push(h){ this.stack.push(h); },
-  pop(h){ const i = this.stack.lastIndexOf(h); if (i >= 0) this.stack.splice(i,1); },
+  push(h){ this.stack.push(h); this.sync(); },
+  pop(h){ const i = this.stack.lastIndexOf(h); if (i >= 0) this.stack.splice(i,1); this.sync(); },
   top(){ return this.stack[this.stack.length-1]; },
+  // touch layout: while a modal is open, hide combat controls so menus
+  // are visible and directly tappable
+  sync(){ document.body.classList.toggle('modal-open', this.stack.length > 0); },
 };
 function normKey(e){
   switch (e.key){

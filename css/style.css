@@ -174,3 +174,20 @@ button:disabled { opacity:.35; cursor:default; }
 /* on touch layouts, move vitals clear of the d-pad */
 body.touch-on #vitals { left:186px; bottom:12px; }
 body.touch-on #keys-hint { display:none; }
+
+/* ===== Touch + modal layout =====
+   While a menu/dialog is open on touch devices: hide the D-pad and
+   combat buttons, shift menus into a clear column on the left, and
+   keep a small A (confirm) and the menu button (back) in a right rail. */
+body.touch-on #dialog { right:78px; }
+body.touch-on #choice { right:78px; left:auto; max-width:70%; }
+body.touch-on #panel  { right:78px; touch-action:pan-y; }
+#panel { touch-action:pan-y; }
+#choice { touch-action:pan-y; }
+
+body.touch-on.modal-open #dpad,
+body.touch-on.modal-open #t-bolt,
+body.touch-on.modal-open #t-jar { display:none; }
+body.touch-on.modal-open #t-a { right:10px; bottom:14px; width:58px; height:58px; }
+body.touch-on.modal-open #t-a small::after { content:''; }
+body.touch-on.modal-open #t-menu { background:rgba(46,36,64,.85); }
