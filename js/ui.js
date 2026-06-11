@@ -75,14 +75,27 @@ function initTouch(){
 }
 
 // ---------- responsive scaling: fit the 720×528 frame to the screen ----------
+// On touch devices the frame shrinks further to leave real bezels for
+// the controls (sides in landscape, bottom strip helps in portrait),
+// so buttons NEVER overlap the game.
 function fitScreen(){
   const g = $('game');
   if (!g) return;
-  const pad = 8;
-  const sx = (window.innerWidth - pad) / 720;
-  const sy = (window.innerHeight - pad) / 528;
-  const s = Math.max(0.4, Math.min(sx, sy));
+  const touch = document.body.classList.contains('touch-on');
+  const w = window.innerWidth, h = window.innerHeight;
+  let availW = w - 8, availH = h - 8;
+  if (touch){
+    if (w >= h){ availW = w - 400; availH = h - 16; }   // landscape: side bezels
+    else { availW = w - 16; availH = h - 260; }          // portrait: bottom strip
+  }
+  const s = Math.max(0.3, Math.min(availW / 720, availH / 528));
+  const portrait = touch && w < h;
   g.style.transform = `scale(${s})`;
+  // portrait: pin the game to the top so it scales downward, leaving
+  // the bottom strip for the controls
+  g.style.transformOrigin = portrait ? 'top center' : 'center center';
+  document.body.style.alignItems = portrait ? 'flex-start' : 'center';
+  g.style.marginTop = portrait ? '8px' : '0';
 }
 window.addEventListener('resize', fitScreen);
 window.addEventListener('orientationchange', () => setTimeout(fitScreen, 200));

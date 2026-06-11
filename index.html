@@ -67,21 +67,19 @@
 
   <div id="toast" class="hidden"></div>
 
-  <!-- Touch controls (mobile / iPad) -->
-  <div id="touch" class="hidden">
-    <div id="dpad">
-      <button class="tbtn dbtn" data-key="ArrowUp"    id="d-up">▲</button>
-      <button class="tbtn dbtn" data-key="ArrowLeft"  id="d-left">◀</button>
-      <button class="tbtn dbtn" data-key="ArrowRight" id="d-right">▶</button>
-      <button class="tbtn dbtn" data-key="ArrowDown"  id="d-down">▼</button>
-    </div>
-    <div id="abtns">
-      <button class="tbtn act" data-key="x" id="t-bolt">✦<small>BOLT</small></button>
-      <button class="tbtn act" data-key="c" id="t-jar">◍<small>JAR</small></button>
-      <button class="tbtn act big" data-key="z" id="t-a">⚔<small>A</small></button>
-    </div>
-    <button class="tbtn menu" data-key="Escape" id="t-menu">☰</button>
-  </div>
+</div>
+
+<!-- Touch controls (mobile / iPad): fixed to the viewport bezels,
+     OUTSIDE the game frame so they can never cover game UI -->
+<div id="touch" class="hidden">
+  <button class="tbtn dbtn" data-key="ArrowUp"    id="d-up">▲</button>
+  <button class="tbtn dbtn" data-key="ArrowLeft"  id="d-left">◀</button>
+  <button class="tbtn dbtn" data-key="ArrowRight" id="d-right">▶</button>
+  <button class="tbtn dbtn" data-key="ArrowDown"  id="d-down">▼</button>
+  <button class="tbtn act" data-key="x" id="t-bolt">✦<small>BOLT</small></button>
+  <button class="tbtn act" data-key="c" id="t-jar">◍<small>JAR</small></button>
+  <button class="tbtn act big" data-key="z" id="t-a">⚔<small>A</small></button>
+  <button class="tbtn menu" data-key="Escape" id="t-menu">☰</button>
 </div>
 <script src="js/data.js"></script>
 <script src="js/sprites.js"></script>

@@ -147,47 +147,35 @@ button:disabled { opacity:.35; cursor:default; }
 #obj-icon { color:var(--gold); }
 
 
-/* Touch controls: above modals so they work as a universal controller
-   (D-pad navigates menus, A confirms, ☰ backs out) */
-#touch { position:absolute; inset:0; z-index:75; pointer-events:none; }
-.tbtn { position:absolute; pointer-events:auto; -webkit-user-select:none; user-select:none;
+/* ===== Touch controls: console layout =====
+   The controls live in the BEZELS, fixed to the viewport, completely
+   outside the (shrunken) game frame — nothing in the game is ever
+   covered. fitScreen() reserves the side rails / bottom strip. */
+#touch { position:fixed; inset:0; z-index:75; pointer-events:none; }
+.tbtn { position:fixed; pointer-events:auto; -webkit-user-select:none; user-select:none;
   -webkit-tap-highlight-color:transparent; touch-action:none;
-  background:rgba(46,36,64,.66); border:2px solid var(--border); color:var(--ink);
-  border-radius:10px; font-size:22px; font-weight:bold; display:flex;
+  background:rgba(46,36,64,.8); border:2px solid var(--border); color:var(--ink);
+  border-radius:12px; font-size:24px; font-weight:bold; display:flex;
   flex-direction:column; align-items:center; justify-content:center; padding:0; }
-.tbtn:active, .tbtn.down { background:rgba(155,109,255,.85); color:#120c1e; border-color:var(--accent); }
-.tbtn small { font-size:9px; letter-spacing:1px; margin-top:-2px; }
-#dpad { position:absolute; left:14px; bottom:14px; width:150px; height:150px; }
-.dbtn { width:50px; height:50px; }
-#d-up    { left:50px; top:0; }
-#d-down  { left:50px; top:100px; }
-#d-left  { left:0; top:50px; }
-#d-right { left:100px; top:50px; }
-#abtns { position:absolute; right:14px; bottom:14px; width:160px; height:150px; }
-.act { width:56px; height:56px; }
-.act.big { width:68px; height:68px; }
-#t-bolt { right:90px; bottom:64px; }
-#t-jar  { right:96px; bottom:0; }
-#t-a    { right:8px;  bottom:18px; }
-.menu { right:14px; top:36px; width:46px; height:38px; font-size:20px; }
-
-/* on touch layouts, move vitals clear of the d-pad */
-body.touch-on #vitals { left:186px; bottom:12px; }
+.tbtn:active, .tbtn.down { background:rgba(155,109,255,.9); color:#120c1e; border-color:var(--accent); }
+.tbtn small { font-size:10px; letter-spacing:1px; margin-top:-2px; }
+.dbtn { width:56px; height:56px; }
+/* left bezel: d-pad */
+#d-up    { left:66px;  bottom:150px; }
+#d-down  { left:66px;  bottom:34px; }
+#d-left  { left:8px;   bottom:92px; }
+#d-right { left:124px; bottom:92px; }
+/* right bezel: actions */
+.act { width:60px; height:60px; }
+.act.big { width:74px; height:74px; }
+#t-a    { right:10px;  bottom:84px; }
+#t-bolt { right:96px;  bottom:140px; }
+#t-jar  { right:100px; bottom:36px; }
+.menu { right:14px; top:12px; width:52px; height:44px; font-size:22px; }
+/* portrait: the game fills the width, so the menu button joins the bottom strip */
+@media (orientation: portrait){
+  body.touch-on .menu { top:auto; bottom:228px; }
+}
 body.touch-on #keys-hint { display:none; }
-
-/* ===== Touch + modal layout =====
-   While a menu/dialog is open on touch devices: hide the D-pad and
-   combat buttons, shift menus into a clear column on the left, and
-   keep a small A (confirm) and the menu button (back) in a right rail. */
-body.touch-on #dialog { right:78px; }
-body.touch-on #choice { right:78px; left:auto; max-width:70%; }
-body.touch-on #panel  { right:78px; touch-action:pan-y; }
 #panel { touch-action:pan-y; }
 #choice { touch-action:pan-y; }
-
-body.touch-on.modal-open #dpad,
-body.touch-on.modal-open #t-bolt,
-body.touch-on.modal-open #t-jar { display:none; }
-body.touch-on.modal-open #t-a { right:10px; bottom:14px; width:58px; height:58px; }
-body.touch-on.modal-open #t-a small::after { content:''; }
-body.touch-on.modal-open #t-menu { background:rgba(46,36,64,.85); }
