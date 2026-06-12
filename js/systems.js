@@ -556,14 +556,30 @@ const Systems = (() => {
   // (plotTier returns 0 for owned-but-unbuilt; tier 1 = camp)
 
   // ---------- catacombs ----------
+  function cataCheckpoints(){
+    const top = Math.floor((G.cata.maxFloor || 0) / 5) * 5;
+    const list = [];
+    for (let f = top; f >= 5 && list.length < 3; f -= 5) list.push(f);
+    return list;
+  }
   async function enterCata(){
-    if (!(await UI.confirm('A cold draft rises from the dark. Descend into the catacombs?', 'The Hole'))) return;
-    const start = 1 + 2 * plotTier('ossuary');
+    const base = 1 + 2 * plotTier('ossuary');
+    const cps = cataCheckpoints();
+    let start = base;
+    if (cps.length){
+      const opts = [`Descend from the surface (B${base})`,
+        ...cps.map(f => `Start at checkpoint — B${f}`), 'Never mind'];
+      const c = await UI.choice(opts);
+      if (c === -1 || c === opts.length - 1) return;
+      if (c > 0) start = cps[c - 1];
+    } else {
+      if (!(await UI.confirm('A cold draft rises from the dark. Descend into the catacombs?', 'The Hole'))) return;
+    }
     World.cataFloor = start;
     World.cata = genCata(start);
     G.cata.maxFloor = Math.max(G.cata.maxFloor || 0, start);
     World.enter('cata', World.cata.start[0], World.cata.start[1]);
-    UI.toast(`Catacombs B${start}${start > 1 ? ' (ossuary shortcut)' : ''} — fight to the stairs.`);
+    UI.toast(`Catacombs B${start}${start === base && base > 1 ? ' (ossuary shortcut)' : ''} — fight to the stairs.`);
   }
   async function descend(){
     if (Combat.enemies().some(e => e.boss)){
@@ -574,17 +590,31 @@ const Systems = (() => {
     World.cataFloor += step;
     World.cata = genCata(World.cataFloor);
     World.enter('cata', World.cata.start[0], World.cata.start[1]);
-    G.cata.maxFloor = Math.max(G.cata.maxFloor || 0, World.cataFloor);
+    const prevMax = G.cata.maxFloor || 0;
+    G.cata.maxFloor = Math.max(prevMax, World.cataFloor);
     skillAdd('delving', 15 + World.cataFloor * 2);
-    UI.toast(`Catacombs B${World.cataFloor}${step > 1 ? ` (descended ${step} floors!)` : ''}`);
+    const cp = Math.floor(G.cata.maxFloor / 5) * 5;
+    if (cp >= 5 && cp > Math.floor(prevMax / 5) * 5)
+      UI.toast(`★ CHECKPOINT B${cp} — you can start here from the hole, any time.`);
+    else
+      UI.toast(`Catacombs B${World.cataFloor}${step > 1 ? ` (descended ${step} floors!)` : ''}`);
   }
   async function ascend(){
-    if (World.cataFloor <= 1 + 2 * plotTier('ossuary')){
+    // the up-stairs always offer a clean way out
+    if (World.cataFloor <= 1){
       World.cata = null;
       World.enter('town', 4, 7);
       UI.toast('You climb back into the gloomy daylight.');
       return;
     }
+    const c = await UI.choice([`Climb to B${World.cataFloor - 1}`, 'Return to the surface', 'Stay down here']);
+    if (c === 1){
+      World.cata = null;
+      World.enter('town', 4, 7);
+      UI.toast('You climb and climb... gloomy daylight, at last.');
+      return;
+    }
+    if (c !== 0) return;
     World.cataFloor--;
     World.cata = genCata(World.cataFloor);
     World.enter('cata', World.cata.far[0], World.cata.far[1]);
@@ -1002,7 +1032,8 @@ const Systems = (() => {
         '"Take these Grave Runes — use one from your satchel to climb out in a pinch."',
         '"Every fifth floor something big guards the stairs. Slay it... or jar it, if you\'ve the nerve."'], 'Gravedigger');
     }
-    return UI.say(`"Deepest you've gone is floor ${G.cata.maxFloor || 0}. The dark remembers."`, 'Gravedigger');
+    const cp = Math.floor((G.cata.maxFloor || 0) / 5) * 5;
+    return UI.say(`"Deepest you've gone is floor ${G.cata.maxFloor || 0}.${cp >= 5 ? ` The hole remembers your checkpoints — you can drop straight to B${cp}.` : ''} The dark remembers too."`, 'Gravedigger');
   }
 
   // ---------- the notice board (quest chain + endless bounty) ----------
