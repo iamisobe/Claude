@@ -492,6 +492,11 @@ const World = (() => {
     let camY = W.ppy - cvs.height/2;
     camX = Math.max(0, Math.min(W.w * TILE - cvs.width, camX));
     camY = Math.max(0, Math.min(W.h * TILE - cvs.height, camY));
+    const shk = typeof Combat !== 'undefined' ? Combat.shake() : 0;
+    if (shk > 0){
+      camX += (Math.random() - 0.5) * shk * 18;
+      camY += (Math.random() - 0.5) * shk * 18;
+    }
     if (W.w * TILE < cvs.width) camX = (W.w * TILE - cvs.width) / 2;
     if (W.h * TILE < cvs.height) camY = (W.h * TILE - cvs.height) / 2;
 

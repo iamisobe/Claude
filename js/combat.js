@@ -113,8 +113,24 @@ const Combat = (() => {
   }
 
   // ---------- helpers ----------
+  let freeze = 0, shakeAmp = 0;   // hit-stop + camera shake
   function floater(x, y, txt, col){ ents.push({ k:'f', x, y, txt, col, ttl:0.9 }); }
   function poof(x, y, col){ ents.push({ k:'x', x, y, ttl:0.35, col }); }
+  // flipbook VFX instance (rot in radians; additive unless soft)
+  function playFX(name, x, y, opt = {}){
+    ents.push({ k:'v', name, x, y, t:0, rot:opt.rot || 0,
+      scale:opt.scale || 1, fps:opt.fps || 20, soft:!!opt.soft });
+  }
+  // spark/mote particles
+  function particles(x, y, n, col, opt = {}){
+    for (let i = 0; i < n; i++){
+      const a = Math.random() * Math.PI * 2;
+      const sp = (opt.speed || 90) * (0.4 + Math.random() * 0.8);
+      ents.push({ k:'pt', x, y, col, ttl: 0.5 + Math.random() * 0.4,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - (opt.up || 0),
+        g: opt.gravity ?? 160, size: opt.size || 2.5 });
+    }
+  }
   function shoot(x, y, tx, ty, dmg, ally, col, spd = 230){
     const d = Math.hypot(tx-x, ty-y) || 1;
     ents.push({ k:'p', x, y, vx:(tx-x)/d*spd, vy:(ty-y)/d*spd, dmg, ally, col, ttl:1.8 });
@@ -167,6 +183,7 @@ const Combat = (() => {
     const tm = attType ? typeMult(attType, DEX[e.sp].ty) : 1;
     const final = Math.max(1, Math.round(dmg * tm * (0.9 + Math.random()*0.2)));
     e.hp -= final; e.aggro = true; e.hurtT = 0.15;
+    particles(e.x, e.y - 8, 3, TYPES[DEX[e.sp].ty[0]].col, { speed: 80 });
     floater(e.x, e.y - 24, String(final), tm > 1 ? '#e8c95d' : tm < 1 ? '#8a7fa8' : '#e8e0d0');
     if (srcXY){ const d = Math.hypot(e.x-srcXY.x, e.y-srcXY.y) || 1;
       moveEnt(e, (e.x-srcXY.x)/d * 1400, (e.y-srcXY.y)/d * 1400, 0.016); }
@@ -181,10 +198,13 @@ const Combat = (() => {
       G.pc.shield -= ab;
       dmg -= ab;
       floater(World.ppx, World.ppy - 28, `(${Math.round(ab)})`, '#8ad8e8');
+      if (G.pc.shield <= 0) playFX('shards', World.ppx, World.ppy - 8, { soft: true, fps: 22 });
       if (dmg <= 0){ G.pc.inv = 0.4; return; }
     }
     G.pc.hp -= Math.max(1, Math.round(dmg));
     G.pc.inv = 0.7;
+    shakeAmp = Math.max(shakeAmp, 0.25);
+    particles(World.ppx, World.ppy - 10, 5, '#e85d5d', { speed: 110 });
     floater(World.ppx, World.ppy - 28, String(Math.max(1, Math.round(dmg))), '#e85d5d');
     if (G.pc.hp <= 0){ dying = true; G.pc.hp = 0; Systems.afterLoss().then(() => dying = false); }
   }
@@ -207,7 +227,9 @@ const Combat = (() => {
 
   function killEnemy(e){
     ents = ents.filter(x => x !== e);
-    poof(e.x, e.y, '#5a4a7a');
+    playFX('soulburst', e.x, e.y - 8, { scale: e.boss ? 1.8 : 1, fps: 18 });
+    particles(e.x, e.y - 10, 10, '#9b6dff', { speed: 60, up: 70, gravity: -40, size: 3 });
+    if (e.boss) shakeAmp = 0.5;
     G.kills = (G.kills || 0) + 1;
     // talents: Soul Harvest + Reaper's Momentum
     const hv = treeRank('harvest');
@@ -284,6 +306,7 @@ const Combat = (() => {
     G.pc.atkCd = 0.38;
     G.pc.swing = 0.18;
     const [fx, fy] = World.faceVec();
+    playFX('slash', World.ppx + fx*34, World.ppy - 6 + fy*34, { rot: Math.atan2(fy, fx), fps: 26 });
     const reach = 1 + 0.2 * treeRank('sweep');   // Wide Sweep
     let hit = 0;
     for (const e of enemies()){
@@ -293,8 +316,11 @@ const Combat = (() => {
       const dot = (dx*fx + dy*fy) / (d || 1);
       if (dot < 0.25 && d > 26) continue;
       hurtEnemy(e, ps.melee, null, { x:World.ppx, y:World.ppy });
+      playFX('impact', e.x, e.y - 10, { fps: 24, scale: e.boss ? 1.5 : 1 });
+      particles(e.x, e.y - 8, 5, '#ffe9b0', { speed: 130 });
       hit++;
     }
+    if (hit){ freeze = 0.045; }   // hit-stop: impacts feel heavy
     return hit > 0;
   }
   function playerBolt(){
@@ -365,6 +391,8 @@ const Combat = (() => {
 
   // ---------- update ----------
   function update(dt){
+    shakeAmp = Math.max(0, shakeAmp - dt * 1.6);
+    if (freeze > 0){ freeze -= dt; return; }   // hit-stop: the world holds its breath
     const ps = pstats();
     G.pc.atkCd = Math.max(0, G.pc.atkCd - dt);
     G.pc.boltCd = Math.max(0, (G.pc.boltCd || 0) - dt);
@@ -417,6 +445,11 @@ const Combat = (() => {
       else if (e.k === 'd') updateDrop(e, dt);
       else if (e.k === 'f'){ e.ttl -= dt; e.y -= 26*dt; if (e.ttl <= 0) ents = ents.filter(x => x !== e); }
       else if (e.k === 'x'){ e.ttl -= dt; if (e.ttl <= 0) ents = ents.filter(x => x !== e); }
+      else if (e.k === 'v'){ e.t += dt; const fr = SPR.fx(e.name);
+        if (e.t * e.fps >= fr.length) ents = ents.filter(x => x !== e); }
+      else if (e.k === 'pt'){ e.ttl -= dt; e.vy += e.g * dt;
+        e.x += e.vx * dt; e.y += e.vy * dt;
+        if (e.ttl <= 0) ents = ents.filter(x => x !== e); }
     }
     for (const m of minions) updateMinion(m, dt);
   }
@@ -487,6 +520,8 @@ const Combat = (() => {
       e.burstCd -= dt;
       if (e.burstCd <= 0 && td < 420){
         e.burstCd = 6;
+        shakeAmp = Math.max(shakeAmp, 0.35);
+        playFX('blast', e.x, e.y - 8, { scale: 1.6, fps: 20 });
         for (let i = 0; i < 10; i++){
           const a = i/10 * Math.PI*2;
           shoot(e.x, e.y, e.x + Math.cos(a)*100, e.y + Math.sin(a)*100, e.dmg, false, '#e8c95d', 160);
@@ -527,18 +562,21 @@ const Combat = (() => {
 
   function updateProj(p, dt){
     p.ttl -= dt;
+    if (p.ally){ p.trail = p.trail || []; p.trail.push({ x:p.x, y:p.y });
+      if (p.trail.length > 6) p.trail.shift(); }
     p.x += p.vx*dt; p.y += p.vy*dt;
     if (p.ttl <= 0 || World.shotBlockedPx(p.x, p.y)){ ents = ents.filter(x => x !== p); return; }
     if (p.ally){
       const e = nearestEnemy(p.x, p.y, 22);
       if (e){
         const dealt = hurtEnemy(e, p.dmg, 'SPIRIT');
+        playFX('blast', p.x, p.y, { scale: treeRank('nova') ? 1.4 : 0.8, fps: 24 });
         if (p.heal && dealt){
           G.pc.hp = Math.min(pstats().maxhp, G.pc.hp + dealt * p.heal);
+          playFX('heal', World.ppx, World.ppy - 14, { fps: 18 });
           floater(World.ppx, World.ppy - 30, '+' + Math.round(dealt * p.heal), '#6dd86d');
         }
         if (treeRank('nova')){ // burst: splash nearby foes
-          poof(p.x, p.y, '#9b6dff');
           for (const e2 of enemies()){
             if (e2 !== e && Math.hypot(e2.x - p.x, e2.y - p.y) < 64)
               hurtEnemy(e2, p.dmg * 0.6, 'SPIRIT');
@@ -603,8 +641,14 @@ const Combat = (() => {
       ctx.save();
       ctx.translate(sx, sy - 6 + bob);
       if ((a.face || 1) < 0) ctx.scale(-1, 1);
-      if (a.hurtT > 0){ ctx.scale(1.14, 0.86); ctx.globalAlpha = 0.75; }
+      if (a.hurtT > 0){ ctx.scale(1.14, 0.86); }
       ctx.drawImage(spr, -size/2, -size/2, size, size);
+      if (a.hurtT > 0){ // white impact flash, additive second pass
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = a.hurtT * 4;
+        ctx.drawImage(spr, -size/2, -size/2, size, size);
+        ctx.globalCompositeOperation = 'source-over';
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
       // hp bar
@@ -631,14 +675,55 @@ const Combat = (() => {
     for (const p of ents){
       const sx = p.x - camX, sy = p.y - camY;
       if (p.k === 'p'){
+        if (p.trail){ // glowing trail
+          ctx.globalCompositeOperation = 'lighter';
+          p.trail.forEach((t, i) => {
+            ctx.globalAlpha = (i / p.trail.length) * 0.45;
+            ctx.fillStyle = p.col;
+            ctx.beginPath(); ctx.arc(t.x - camX, t.y - camY, 2 + i * 0.6, 0, 7); ctx.fill();
+          });
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = 'source-over';
+        }
         ctx.fillStyle = p.col;
         ctx.beginPath(); ctx.arc(sx, sy, p.ally ? 5 : 6, 0, 7); ctx.fill();
         ctx.fillStyle = '#fff8'; ctx.beginPath(); ctx.arc(sx, sy, 2, 0, 7); ctx.fill();
+      } else if (p.k === 'v'){
+        const fr = SPR.fx(p.name);
+        const f = Math.min(fr.length - 1, Math.floor(p.t * p.fps));
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(p.rot);
+        ctx.scale(p.scale, p.scale);
+        if (!p.soft) ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(fr[f], -fr[f].width/2, -fr[f].height/2);
+        ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (p.k === 'pt'){
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(1, p.ttl * 2.2);
+        ctx.fillStyle = p.col;
+        ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
       } else if (p.k === 'f'){
         ctx.font = 'bold 13px monospace';
         ctx.fillStyle = '#000'; ctx.fillText(p.txt, sx+1, sy+1);
         ctx.fillStyle = p.col; ctx.fillText(p.txt, sx, sy);
       }
+    }
+    // buff auras: a slow sigil under the player while empowered
+    if (G.pc.vigor > 0 || G.pc.packFrenzy > 0 || G.pc.frenzy > 0 || G.pc.shield > 0){
+      const fr = SPR.fx('circle');
+      const f = Math.floor(performance.now() / 70) % fr.length;
+      ctx.save();
+      ctx.translate(World.ppx - camX, World.ppy - camY + 12);
+      ctx.globalAlpha = 0.4;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(fr[f], -fr[f].width/2, -fr[f].height/2);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
     // player swing arc
     if (G.pc.swing > 0){
@@ -664,6 +749,7 @@ const Combat = (() => {
     G.pc.soul -= A.soul;
     G.pc.cds[id] = A.cd;
     G.pc.cast = 0.18;
+    playFX('circle', World.ppx, World.ppy + 12, { fps: 22 });
     const [fx, fy] = World.faceVec();
     const tgt = nearestEnemy(World.ppx, World.ppy, 430);
     const tx = tgt ? tgt.x : World.ppx + fx*200, ty = tgt ? tgt.y : World.ppy + fy*200;
@@ -687,7 +773,8 @@ const Combat = (() => {
       }
       case 'grasp': {
         if (!tgt){ UI.toast('No foe in reach.'); G.pc.soul += A.soul; G.pc.cds[id] = 0; return; }
-        poof(tgt.x, tgt.y, '#d8d0b8');
+        playFX('spikes', tgt.x, tgt.y, { soft: true, fps: 16, scale: 1.3 });
+        shakeAmp = Math.max(shakeAmp, 0.2);
         for (const e of enemies()){
           if (Math.hypot(e.x - tgt.x, e.y - tgt.y) < 85){
             hurtEnemy(e, ps.bolt * (0.8 + 0.2*r), 'BONE');
@@ -752,7 +839,7 @@ const Combat = (() => {
   function clearHostiles(){ ents = ents.filter(e => e.k !== 'e' && e.k !== 'p'); }
 
   return { reset, update, draw, playerAttack, playerBolt, throwJar, pstats, minionCap,
-    castSkill, floatText: floater,
+    castSkill, floatText: floater, shake: () => shakeAmp,
     syncMinions, spawnEnemy, spawnRivalPack, clearHostiles, zoneLevel,
     enemies: () => enemies(), nearestEnemy, hasAggro: () => enemies().some(e => e.aggro) };
 })();

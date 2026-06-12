@@ -103,6 +103,138 @@ const SPR = (() => {
     return cache[k];
   }
 
+
+  // ============ COMBAT VFX FLIPBOOKS ============
+  // pre-rendered frame sequences, like real games' effect sheets.
+  // played by combat with additive blending for glow.
+  const FXBOOK = {};
+  function flip(n, size, draw){
+    const arr = [];
+    for (let f = 0; f < n; f++){
+      const c = cv(size, size), g = c.getContext('2d');
+      g.translate(size/2, size/2);
+      draw(g, f / (n - 1), size);
+      arr.push(c);
+    }
+    return arr;
+  }
+  function buildFX(){
+    // slash: crescent swoosh (points right; rotated at play time)
+    FXBOOK.slash = flip(6, 72, (g, p) => {
+      const a = 1 - p;
+      g.rotate(-0.5 + p * 1.2);
+      g.strokeStyle = `rgba(255,255,255,${0.9 * a})`;
+      g.lineWidth = 7 * a + 2;
+      g.beginPath(); g.arc(0, 0, 26, -0.9, 0.9); g.stroke();
+      g.strokeStyle = `rgba(205,180,255,${0.5 * a})`;
+      g.lineWidth = 13 * a + 4;
+      g.beginPath(); g.arc(0, 0, 26, -0.7, 0.7); g.stroke();
+    });
+    // impact: flash + radial spikes + ring
+    FXBOOK.impact = flip(7, 56, (g, p) => {
+      const a = 1 - p;
+      g.fillStyle = `rgba(255,255,255,${a})`;
+      g.beginPath(); g.arc(0, 0, 7 * a + 1, 0, 7); g.fill();
+      g.strokeStyle = `rgba(255,240,200,${a * 0.9})`;
+      g.lineWidth = 2;
+      for (let i = 0; i < 6; i++){
+        const ang = i * Math.PI / 3 + 0.3;
+        const r0 = 4 + p * 16, r1 = r0 + 7 * a + 2;
+        g.beginPath();
+        g.moveTo(Math.cos(ang) * r0, Math.sin(ang) * r0);
+        g.lineTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
+        g.stroke();
+      }
+      g.strokeStyle = `rgba(255,255,255,${a * 0.6})`;
+      g.beginPath(); g.arc(0, 0, p * 22 + 3, 0, 7); g.stroke();
+    });
+    // blast: violet plasma explosion
+    FXBOOK.blast = flip(8, 72, (g, p) => {
+      const a = 1 - p;
+      const grd = g.createRadialGradient(0, 0, 1, 0, 0, 12 + p * 16);
+      grd.addColorStop(0, `rgba(255,255,255,${a})`);
+      grd.addColorStop(0.4, `rgba(155,109,255,${a * 0.9})`);
+      grd.addColorStop(1, 'rgba(155,109,255,0)');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(0, 0, 12 + p * 16, 0, 7); g.fill();
+      g.strokeStyle = `rgba(205,180,255,${a * 0.8})`;
+      g.lineWidth = 3 * a + 1;
+      g.beginPath(); g.arc(0, 0, p * 30 + 4, 0, 7); g.stroke();
+      g.fillStyle = `rgba(106,79,154,${a * 0.5})`;
+      for (let i = 0; i < 5; i++){
+        const ang = i * 1.26 + p * 2;
+        g.beginPath(); g.arc(Math.cos(ang) * p * 22, Math.sin(ang) * p * 22, 6 * a + 1, 0, 7); g.fill();
+      }
+    });
+    // soulburst: death — expanding ring + wisps spiraling up
+    FXBOOK.soulburst = flip(8, 72, (g, p) => {
+      const a = 1 - p;
+      g.strokeStyle = `rgba(138,216,232,${a * 0.9})`;
+      g.lineWidth = 3 * a + 1;
+      g.beginPath(); g.arc(0, 0, 6 + p * 26, 0, 7); g.stroke();
+      g.fillStyle = `rgba(155,109,255,${a})`;
+      for (let i = 0; i < 6; i++){
+        const ang = i * 1.05 + p * 1.5;
+        g.beginPath();
+        g.arc(Math.cos(ang) * (8 + p * 14), Math.sin(ang) * (8 + p * 10) - p * 22, 3 * a + 1, 0, 7);
+        g.fill();
+      }
+      if (p < 0.3){ g.fillStyle = `rgba(255,255,255,${1 - p / 0.3})`;
+        g.beginPath(); g.arc(0, 0, 8, 0, 7); g.fill(); }
+    });
+    // sigil: cast circle under the player
+    FXBOOK.circle = flip(8, 88, (g, p) => {
+      const a = Math.sin(p * Math.PI);
+      g.scale(1, 0.5); // floor perspective
+      g.strokeStyle = `rgba(155,109,255,${a * 0.9})`;
+      g.lineWidth = 2.5;
+      g.beginPath(); g.arc(0, 0, 26 + p * 8, 0, 7); g.stroke();
+      g.beginPath(); g.arc(0, 0, 18 + p * 5, 0, 7); g.stroke();
+      g.fillStyle = `rgba(205,180,255,${a})`;
+      for (let i = 0; i < 4; i++){
+        const ang = i * Math.PI / 2 + p * 2.5;
+        g.fillRect(Math.cos(ang) * (22 + p * 6) - 3, Math.sin(ang) * (22 + p * 6) - 3, 6, 6);
+      }
+    });
+    // bone spikes erupting (Grave Grasp)
+    FXBOOK.spikes = flip(7, 72, (g, p) => {
+      const h = Math.sin(p * Math.PI);
+      for (let i = 0; i < 5; i++){
+        const x = (i - 2) * 13;
+        const ht = (16 + (i % 2) * 8) * h;
+        g.fillStyle = '#d8d0b8';
+        g.beginPath();
+        g.moveTo(x - 5, 22); g.lineTo(x, 22 - ht); g.lineTo(x + 5, 22);
+        g.closePath(); g.fill();
+        g.strokeStyle = '#8a8268'; g.lineWidth = 1; g.stroke();
+      }
+    });
+    // bone shards flying out (shield break)
+    FXBOOK.shards = flip(7, 64, (g, p) => {
+      const a = 1 - p;
+      g.fillStyle = `rgba(216,208,184,${a})`;
+      for (let i = 0; i < 8; i++){
+        const ang = i * 0.785 + 0.4;
+        const r = 6 + p * 26;
+        g.save();
+        g.translate(Math.cos(ang) * r, Math.sin(ang) * r + p * p * 14);
+        g.rotate(ang + p * 4);
+        g.fillRect(-3, -1.5, 6, 3);
+        g.restore();
+      }
+    });
+    // heal motes rising
+    FXBOOK.heal = flip(8, 56, (g, p) => {
+      const a = Math.sin(p * Math.PI);
+      g.fillStyle = `rgba(109,216,109,${a})`;
+      for (let i = 0; i < 6; i++){
+        const x = Math.sin(i * 2.2 + p * 5) * 14;
+        g.beginPath(); g.arc(x, 16 - p * 34 + i * 3, 2.4, 0, 7); g.fill();
+      }
+    });
+  }
+  function fx(name){ return FXBOOK[name]; }
+
   // --- tiles ---
   const T = {}; // name -> canvas
   function tile(name, fn){
@@ -638,8 +770,8 @@ const SPR = (() => {
     return c;
   }
 
-  function init(){ buildTiles(); buildFurniture(); buildCrops(); }
+  function init(){ buildTiles(); buildFurniture(); buildCrops(); buildFX(); }
   function get(name){ return T[name]; }
 
-  return { init, get, creature, actor, drawArt, cv, gearIcon };
+  return { init, get, creature, actor, drawArt, cv, gearIcon, fx };
 })();
