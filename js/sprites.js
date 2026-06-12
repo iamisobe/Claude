@@ -149,6 +149,12 @@ const SPR = (() => {
     tile('hole', x => { fill(x,'#2a3a4a'); x.fillStyle='#06040a'; x.fillRect(2,2,12,12);
       x.fillStyle='#16121f'; x.fillRect(2,2,12,3);
       x.fillStyle='#56506a'; x.fillRect(1,1,14,1); x.fillRect(1,14,14,1); x.fillRect(1,1,1,14); x.fillRect(14,1,1,14); });
+    // the player's staff, horizontal — rotated for the swing animation
+    tile('fx_staff', x => { x.clearRect(0,0,16,16);
+      x.fillStyle='#8a5a3a'; x.fillRect(0,7,13,2);
+      x.fillStyle='#6d4528'; x.fillRect(0,8,13,1);
+      x.fillStyle='#9b6dff'; x.fillRect(13,6,3,4);
+      x.fillStyle='#cdb4ff'; x.fillRect(14,7,1,2); });
   }
 
   // --- furniture (16x16 each) ---
@@ -222,28 +228,61 @@ const SPR = (() => {
     rival:  { robe:'#17131f', robe2:'#241e30', skin:'#cdc4b8', hood:true,  trim:'#e8442e' },
   };
   function actorCanvas(kind, dir, step){
-    // dir: 0 down, 1 up, 2 left, 3 right
+    // dir: 0 down, 1 up, 2 left, 3 right · two walk frames swing arms+legs
     const o = OUTFITS[kind] || OUTFITS.rival;
     const c = cv(16,16), x = c.getContext('2d');
     const flip = dir === 2;
     if (flip){ x.translate(16,0); x.scale(-1,1); }
     const side = dir === 2 || dir === 3;
-    // legs/robe bottom
-    x.fillStyle = o.robe;
-    x.fillRect(4,8,8,6);
-    x.fillRect(step ? 4 : 9, 14, 3, 1); x.fillRect(step ? 9 : 4, 14, 3, 2);
-    x.fillStyle = o.robe2; x.fillRect(5,9,6,4);
-    // torso trim
-    x.fillStyle = o.trim; x.fillRect(4,8,8,1);
-    // head
-    if (dir === 1){ // back
+    const up = dir === 1;
+    const sw = step ? 1 : 0;          // walk-cycle phase
+
+    // ---- robe body ----
+    x.fillStyle = o.robe;  x.fillRect(5,8,6,6);
+    x.fillStyle = o.robe2; x.fillRect(6,9,4,4);
+    x.fillStyle = o.trim;  x.fillRect(5,8,6,1);
+    // feet (alternate stride)
+    x.fillStyle = '#2a2014';
+    x.fillRect(5, 14, 2, sw ? 1 : 2);
+    x.fillRect(9, 14, 2, sw ? 2 : 1);
+
+    // ---- arms ----
+    if (side){
+      // back arm hint
+      x.fillStyle = o.robe; x.fillRect(5, 9, 1, 3);
+      // front arm reaches forward, swings with the stride
+      x.fillStyle = o.robe2; x.fillRect(8, 9 + sw, 3, 2);
+      x.fillStyle = o.skin;  x.fillRect(11, 9 + sw, 1, 1);
+      if (kind === 'player'){ // staff held forward
+        x.fillStyle = '#8a5a3a'; x.fillRect(10, 8 + sw, 6, 1);
+        x.fillStyle = o.trim;    x.fillRect(15, 7 + sw, 1, 2);
+      }
+    } else {
+      // two sleeves swinging in opposite phase
+      x.fillStyle = o.robe2;
+      x.fillRect(3, 8 + sw, 2, 4);
+      x.fillRect(11, 9 - sw, 2, 4);
+      x.fillStyle = o.skin;
+      x.fillRect(3, 12 + sw, 2, 1);
+      x.fillRect(11, 13 - sw, 2, 1);
+      if (kind === 'player'){ // staff at the side (left hand when seen from behind)
+        const sxp = up ? 2 : 13;
+        x.fillStyle = '#8a5a3a'; x.fillRect(sxp, 4, 1, 10);
+        x.fillStyle = o.trim;    x.fillRect(sxp, 2, 1, 2);
+        x.fillStyle = '#cdb4ff'; x.fillRect(sxp, 1, 1, 1);
+      }
+    }
+
+    // ---- head ----
+    if (up){
       x.fillStyle = o.hood ? o.robe : (o.hair || '#3a2c1c');
-      x.fillRect(4,1,8,7); x.fillStyle = o.hood ? o.robe2 : (o.hair||'#3a2c1c'); x.fillRect(5,2,6,5);
+      x.fillRect(4,1,8,7);
+      x.fillStyle = o.hood ? o.robe2 : (o.hair || '#3a2c1c');
+      x.fillRect(5,2,6,5);
     } else {
       x.fillStyle = o.skin; x.fillRect(5,2,6,6);
       if (o.hood){ x.fillStyle = o.robe; x.fillRect(4,1,8,2); x.fillRect(4,1,1,7); x.fillRect(11,1,1,7); x.fillRect(5,3,1,1); x.fillRect(10,3,1,1); }
       else { x.fillStyle = o.hair || '#3a2c1c'; x.fillRect(4,1,8,2); x.fillRect(4,2,1,3); x.fillRect(11,2,1,3); }
-      // eyes
       x.fillStyle = '#17131f';
       if (side){ x.fillRect(9,4,1,2); }
       else { x.fillRect(6,4,1,2); x.fillRect(9,4,1,2); }

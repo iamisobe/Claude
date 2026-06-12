@@ -140,6 +140,25 @@ const Combat = (() => {
     if (stuck || !World.solidPx(nx, e.y)) e.x = nx;
     if (stuck || !World.solidPx(e.x, ny)) e.y = ny;
   }
+  // steer toward a point with wall-slide: when blocked, sidestep along the
+  // wall for a moment instead of grinding into it (fixes corner pile-ups)
+  function seek(e, tx, ty, spd, dt){
+    const d = Math.hypot(tx - e.x, ty - e.y) || 1;
+    let vx = (tx - e.x) / d, vy = (ty - e.y) / d;
+    if (e.unstick > 0){
+      e.unstick -= dt;
+      const s = e.uside || 1;
+      const pvx = -vy * s, pvy = vx * s;
+      vx = (vx + pvx * 2) / 3; vy = (vy + pvy * 2) / 3;
+    }
+    const ox = e.x, oy = e.y;
+    moveEnt(e, vx * spd, vy * spd, dt);
+    if (Math.hypot(e.x - ox, e.y - oy) < spd * dt * 0.3){
+      e.unstick = 0.45;
+      e.uside = Math.random() < 0.5 ? 1 : -1;
+    }
+    if (Math.abs(vx) > 0.2) e.face = vx >= 0 ? 1 : -1;
+  }
 
   // ---------- damage ----------
   function hurtEnemy(e, dmg, attType, srcXY){
@@ -262,6 +281,7 @@ const Combat = (() => {
     const ps = pstats();
     G.pc.soul -= 6;
     G.pc.boltCd = 0.55;
+    G.pc.cast = 0.18;
     const t = nearestEnemy(World.ppx, World.ppy, 430);
     let tx, ty;
     if (t){ tx = t.x; ty = t.y; }
@@ -322,6 +342,7 @@ const Combat = (() => {
     G.pc.boltCd = Math.max(0, (G.pc.boltCd || 0) - dt);
     G.pc.inv = Math.max(0, (G.pc.inv || 0) - dt);
     G.pc.swing = Math.max(0, (G.pc.swing || 0) - dt);
+    G.pc.cast = Math.max(0, (G.pc.cast || 0) - dt);
     G.pc.soul = Math.min(ps.maxsoul, G.pc.soul + ps.regen * dt);
 
     // regen when no pursuer is close — escaping danger lets you breathe
@@ -392,24 +413,24 @@ const Combat = (() => {
     const hit = () => { if (tgt.kind === 'player') hurtPlayer(e.dmg); else hurtMinion(tgt.m, e.dmg); };
     switch (e.arch){
       case 'chaser': case 'tank':
-        if (td > hitR) moveEnt(e, dx*spd, dy*spd, dt);
+        if (td > hitR) seek(e, tgt.x, tgt.y, spd, dt);
         else if (e.cd <= 0){ e.cd = e.arch === 'tank' ? 1.5 : 1.0; hit(); }
         break;
       case 'wisp': {
-        const sway = Math.sin(performance.now()/180 + e.sx) * 0.6;
-        if (td > hitR) moveEnt(e, (dx - dy*sway)*spd, (dy + dx*sway)*spd, dt);
+        const sway = Math.sin(performance.now()/180 + e.sx) * 60;
+        if (td > hitR) seek(e, tgt.x - dy*sway, tgt.y + dx*sway, spd, dt);
         else if (e.cd <= 0){ e.cd = 0.9; hit(); }
         break;
       }
       case 'spitter':
-        if (td < 110) moveEnt(e, -dx*spd, -dy*spd, dt);
-        else if (td > 210) moveEnt(e, dx*spd, dy*spd, dt);
+        if (td < 110) seek(e, e.x - dx*100, e.y - dy*100, spd, dt);
+        else if (td > 210) seek(e, tgt.x, tgt.y, spd, dt);
         if (e.cd <= 0 && td < 320){ e.cd = 1.7 + Math.random()*0.6;
           shoot(e.x, e.y, tgt.x, tgt.y, e.dmg, false, TYPES[DEX[e.sp].ty[0]].col, 200); }
         break;
       case 'caster':
-        if (td < 140) moveEnt(e, -dx*spd, -dy*spd, dt);
-        else if (td > 240) moveEnt(e, dx*spd, dy*spd, dt);
+        if (td < 140) seek(e, e.x - dx*100, e.y - dy*100, spd, dt);
+        else if (td > 240) seek(e, tgt.x, tgt.y, spd, dt);
         if (e.cd <= 0 && td < 380){ e.cd = 2.6;
           for (const a of [-0.25, 0, 0.25]){
             const c = Math.cos(a), s = Math.sin(a);
@@ -444,8 +465,8 @@ const Combat = (() => {
     if (tgt){
       const d = dist(m, tgt) || 1;
       const want = ranged ? 130 : (tgt.boss ? 52 : 32);
-      if (d > want + 8) moveEnt(m, (tgt.x-m.x)/d*spd, (tgt.y-m.y)/d*spd, dt);
-      else if (d < want - 24) moveEnt(m, -(tgt.x-m.x)/d*spd, -(tgt.y-m.y)/d*spd, dt);
+      if (d > want + 8) seek(m, tgt.x, tgt.y, spd, dt);
+      else if (d < want - 24) seek(m, m.x - (tgt.x-m.x)/d*100, m.y - (tgt.y-m.y)/d*100, spd, dt);
       if (m.cd <= 0 && d < (ranged ? 280 : want + 14)){
         m.cd = ranged ? 1.4 : 1.0;
         if (ranged) shoot(m.x, m.y, tgt.x, tgt.y, minionDmg(m.g), true, TYPES[DEX[m.g.sp].ty[0]].col, 240, );
@@ -456,7 +477,7 @@ const Combat = (() => {
       const a = (m.slot / Math.max(1, G.party.length)) * Math.PI*2;
       const hx = World.ppx + Math.cos(a)*44, hy = World.ppy + Math.sin(a)*44;
       const d = Math.hypot(hx-m.x, hy-m.y);
-      if (d > 26) moveEnt(m, (hx-m.x)/d*spd, (hy-m.y)/d*spd, dt);
+      if (d > 26) seek(m, hx, hy, spd, dt);
       if (d > 420){ m.x = hx; m.y = hy; } // teleport if left behind
     }
   }
@@ -511,13 +532,23 @@ const Combat = (() => {
     }
     // enemies + minions sorted with player by world draw; combat draws them itself sorted by y
     const actors = [...enemies(), ...minions].sort((a, b) => a.y - b.y);
+    const nowT = performance.now();
     for (const a of actors){
       const sx = a.x - camX, sy = a.y - camY;
       const size = a.boss ? 76 : a.k === 'm' ? 40 : 46;
       const spr = SPR.creature(a.k === 'm' ? a.g.sp : a.sp);
+      // drop shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.ellipse(sx, sy + size*0.36, size*0.28, size*0.11, 0, 0, 7); ctx.fill();
       if (a.k === 'm'){ ctx.strokeStyle = '#6dd86d55'; ctx.beginPath(); ctx.arc(sx, sy + size*0.4, 12, 0, 7); ctx.stroke(); }
-      if (a.hurtT > 0){ ctx.globalAlpha = 0.6; }
-      ctx.drawImage(spr, sx - size/2, sy - size/2 - 6, size, size);
+      // living bob + facing flip + hit squash
+      const bob = Math.sin(nowT/150 + (a.sx || a.slot*7 || 0)) * 1.6;
+      ctx.save();
+      ctx.translate(sx, sy - 6 + bob);
+      if ((a.face || 1) < 0) ctx.scale(-1, 1);
+      if (a.hurtT > 0){ ctx.scale(1.14, 0.86); ctx.globalAlpha = 0.75; }
+      ctx.drawImage(spr, -size/2, -size/2, size, size);
+      ctx.restore();
       ctx.globalAlpha = 1;
       // hp bar
       const hp = a.k === 'm' ? a.g.hp : a.hp;

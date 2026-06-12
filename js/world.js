@@ -443,16 +443,48 @@ const World = (() => {
     // combat layer (enemies, minions, projectiles, drops, floaters)
     Combat.draw(ctx, camX, camY);
     drawBobber(ctx, camX, camY);
-    // npcs
+    // npcs (shadow + idle sway)
+    const nowT = performance.now();
     for (const n of npcs()){
-      ctx.drawImage(SPR.actor(n.kind, n.dir ?? 0, 0), Math.round(n.x*TILE - camX), Math.round(n.y*TILE - camY), TILE, TILE);
+      const nx = n.x*TILE - camX + TILE/2, ny = n.y*TILE - camY;
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.ellipse(nx, ny + TILE - 6, 13, 5, 0, 0, 7); ctx.fill();
+      ctx.drawImage(SPR.actor(n.kind, n.dir ?? 0, 0),
+        Math.round(nx - TILE/2), Math.round(ny + Math.sin(nowT/700 + n.x) * 1.2), TILE, TILE);
     }
-    // player
+    // player: shadow, walk/idle bob, swing + cast animations
+    const px = W.ppx - camX, py = W.ppy - camY;
     const moving = Input.held.left || Input.held.right || Input.held.up || Input.held.down;
+    const bobY = moving ? Math.sin(nowT/130) * 1.6 : Math.sin(nowT/600) * 1.0;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(px, py + 15, 13, 5, 0, 0, 7); ctx.fill();
     ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0),
-      Math.round(W.ppx - TILE/2 - camX), Math.round(W.ppy - TILE/2 - camY - 8), TILE, TILE);
+      Math.round(px - TILE/2), Math.round(py - TILE/2 - 8 + bobY), TILE, TILE);
+    if (G.pc && G.pc.swing > 0){
+      // staff sweeps through the strike arc
+      const prog = 1 - G.pc.swing / 0.18;
+      const [fvx, fvy] = faceVec();
+      const base = Math.atan2(fvy, fvx);
+      const ang = base - 1.2 + 2.4 * prog;
+      ctx.strokeStyle = 'rgba(232,224,208,0.30)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(px, py - 6, 38, base - 1.2, ang); ctx.stroke(); ctx.lineWidth = 1;
+      ctx.save();
+      ctx.translate(px, py - 6);
+      ctx.rotate(ang);
+      ctx.drawImage(SPR.get('fx_staff'), 8, -7, 34, 14);
+      ctx.restore();
+    }
+    if (G.pc && G.pc.cast > 0){
+      // hex bolt leaves a violet flare at the staff tip
+      const [fvx, fvy] = faceVec();
+      const t = G.pc.cast / 0.18;
+      ctx.fillStyle = `rgba(155,109,255,${0.8 * t})`;
+      ctx.beginPath(); ctx.arc(px + fvx*26, py - 10 + fvy*26, 5 + (1 - t) * 10, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(205,180,255,${t})`;
+      ctx.beginPath(); ctx.arc(px + fvx*26, py - 10 + fvy*26, 3, 0, 7); ctx.fill();
+    }
     if (G.pc && G.pc.inv > 0.2){ ctx.strokeStyle = '#e8e0d066';
-      ctx.beginPath(); ctx.arc(W.ppx - camX, W.ppy - camY - 6, 26, 0, 7); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(px, py - 6, 26, 0, 7); ctx.stroke(); }
 
     // light tint
     let tint = 0;
