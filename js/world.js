@@ -563,9 +563,22 @@ const World = (() => {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(px, py + 16, 15, 5, 0, 0, 7); ctx.fill();
     const fishing = typeof Systems !== 'undefined' && Systems.fishingFx && Systems.fishingFx();
-    const pmode = fishing ? 'rod' : (G.pc && G.pc.swing > 0 ? 'bare' : null);
+    // pose: windup -> strike (with a forward LUNGE), cast, flinch
+    let pmode = fishing ? 'rod' : null;
+    let lunge = 0;
+    const [lfx, lfy] = faceVec();
+    if (!fishing && G.pc){
+      if (G.pc.flinch > 0) pmode = 'flinch';
+      else if (G.pc.swing > 0){
+        pmode = G.pc.swing > 0.1 ? 'attack0' : 'attack1';
+        lunge = (0.18 - G.pc.swing) / 0.18 * 9;            // ram forward through the strike
+      }
+      else if (G.pc.cast > 0.04) pmode = 'cast';
+    }
+    if (G.pc && G.pc.flinch > 0) lunge = -4;               // recoil backwards
+    const pdx = px + lfx * lunge, pdy = py + lfy * lunge;
     ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0, pmode),
-      Math.round(px - 32), Math.round(py - 44 + bobY), 64, 64);
+      Math.round(pdx - 32), Math.round(pdy - 44 + bobY), 64, 64);
     if (G.pc && G.pc.swing > 0){
       // staff sweeps through the strike arc
       const prog = 1 - G.pc.swing / 0.18;
@@ -574,11 +587,18 @@ const World = (() => {
       const ang = base - 1.2 + 2.4 * prog;
       ctx.strokeStyle = 'rgba(232,224,208,0.30)'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(px, py - 6, 38, base - 1.2, ang); ctx.stroke(); ctx.lineWidth = 1;
-      ctx.save();
-      ctx.translate(px, py - 6);
-      ctx.rotate(ang);
-      ctx.drawImage(SPR.get('fx_staff'), 8, -7, 34, 14);
-      ctx.restore();
+      // motion-blur afterimages of the staff sweeping behind the live frame
+      for (const [back, alpha] of [[0.55, 0.18], [0.28, 0.38], [0, 0.95]]){
+        ctx.save();
+        ctx.translate(pdx, pdy - 6);
+        ctx.rotate(Math.max(base - 1.2, ang - back));
+        ctx.globalAlpha = alpha;
+        if (back > 0) ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(SPR.get('fx_staff'), 8, -7, 34, 14);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
     if (G.pc && G.pc.cast > 0){
       // hex bolt leaves a violet flare at the staff tip
@@ -609,6 +629,11 @@ const World = (() => {
     if (ZONES[W.map] && ZONES[W.map].dark) tint = Math.max(tint, ZONES[W.map].dark);
     if (tint > 0){
       ctx.fillStyle = `rgba(8,5,24,${tint})`;
+      ctx.fillRect(0, 0, cvs.width, cvs.height);
+    }
+    const flash = typeof Combat !== 'undefined' ? Combat.flash() : 0;
+    if (flash > 0){
+      ctx.fillStyle = `rgba(240,235,255,${Math.min(0.35, flash * 2)})`;
       ctx.fillRect(0, 0, cvs.width, cvs.height);
     }
     if (W.map === 'cata'){

@@ -113,7 +113,7 @@ const Combat = (() => {
   }
 
   // ---------- helpers ----------
-  let freeze = 0, shakeAmp = 0;   // hit-stop + camera shake
+  let freeze = 0, shakeAmp = 0, flashT = 0;   // hit-stop + camera shake + kill flash
   function floater(x, y, txt, col){ ents.push({ k:'f', x, y, txt, col, ttl:0.9 }); }
   function poof(x, y, col){ ents.push({ k:'x', x, y, ttl:0.35, col }); }
   // flipbook VFX instance (rot in radians; additive unless soft)
@@ -203,6 +203,7 @@ const Combat = (() => {
     }
     G.pc.hp -= Math.max(1, Math.round(dmg));
     G.pc.inv = 0.7;
+    G.pc.flinch = 0.22;
     shakeAmp = Math.max(shakeAmp, 0.25);
     particles(World.ppx, World.ppy - 10, 5, '#e85d5d', { speed: 110 });
     floater(World.ppx, World.ppy - 28, String(Math.max(1, Math.round(dmg))), '#e85d5d');
@@ -229,6 +230,7 @@ const Combat = (() => {
     ents = ents.filter(x => x !== e);
     playFX('soulburst', e.x, e.y - 8, { scale: e.boss ? 1.8 : 1, fps: 18 });
     particles(e.x, e.y - 10, 10, '#9b6dff', { speed: 60, up: 70, gravity: -40, size: 3 });
+    flashT = Math.max(flashT, e.boss ? 0.3 : 0.09);
     if (e.boss) shakeAmp = 0.5;
     G.kills = (G.kills || 0) + 1;
     // talents: Soul Harvest + Reaper's Momentum
@@ -392,6 +394,8 @@ const Combat = (() => {
   // ---------- update ----------
   function update(dt){
     shakeAmp = Math.max(0, shakeAmp - dt * 1.6);
+    flashT = Math.max(0, flashT - dt);
+    if (G.pc) G.pc.flinch = Math.max(0, (G.pc.flinch || 0) - dt);
     if (freeze > 0){ freeze -= dt; return; }   // hit-stop: the world holds its breath
     const ps = pstats();
     G.pc.atkCd = Math.max(0, G.pc.atkCd - dt);
@@ -702,8 +706,13 @@ const Combat = (() => {
       } else if (p.k === 'pt'){
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = Math.min(1, p.ttl * 2.2);
-        ctx.fillStyle = p.col;
-        ctx.fillRect(sx - p.size/2, sy - p.size/2, p.size, p.size);
+        ctx.strokeStyle = p.col;
+        ctx.lineWidth = p.size * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - p.vx * 0.045, sy - p.vy * 0.045);  // spark streak
+        ctx.stroke();
+        ctx.lineWidth = 1;
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
       } else if (p.k === 'f'){
@@ -839,7 +848,7 @@ const Combat = (() => {
   function clearHostiles(){ ents = ents.filter(e => e.k !== 'e' && e.k !== 'p'); }
 
   return { reset, update, draw, playerAttack, playerBolt, throwJar, pstats, minionCap,
-    castSkill, floatText: floater, shake: () => shakeAmp,
+    castSkill, floatText: floater, shake: () => shakeAmp, flash: () => flashT,
     syncMinions, spawnEnemy, spawnRivalPack, clearHostiles, zoneLevel,
     enemies: () => enemies(), nearestEnemy, hasAggro: () => enemies().some(e => e.aggro) };
 })();

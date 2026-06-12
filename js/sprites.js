@@ -119,16 +119,27 @@ const SPR = (() => {
     return arr;
   }
   function buildFX(){
-    // slash: crescent swoosh (points right; rotated at play time)
-    FXBOOK.slash = flip(6, 72, (g, p) => {
+    // slash: thick motion-streaked crescent (points right; rotated at play)
+    FXBOOK.slash = flip(8, 96, (g, p) => {
       const a = 1 - p;
-      g.rotate(-0.5 + p * 1.2);
-      g.strokeStyle = `rgba(255,255,255,${0.9 * a})`;
-      g.lineWidth = 7 * a + 2;
-      g.beginPath(); g.arc(0, 0, 26, -0.9, 0.9); g.stroke();
-      g.strokeStyle = `rgba(205,180,255,${0.5 * a})`;
-      g.lineWidth = 13 * a + 4;
-      g.beginPath(); g.arc(0, 0, 26, -0.7, 0.7); g.stroke();
+      g.rotate(-0.7 + p * 1.6);
+      // hot core
+      g.strokeStyle = `rgba(255,255,255,${a})`;
+      g.lineWidth = 11 * a + 3;
+      g.beginPath(); g.arc(0, 0, 32, -1.0, 1.0); g.stroke();
+      // violet bloom
+      g.strokeStyle = `rgba(190,150,255,${0.7 * a})`;
+      g.lineWidth = 22 * a + 6;
+      g.beginPath(); g.arc(0, 0, 32, -0.8, 0.8); g.stroke();
+      // trailing streaks
+      g.strokeStyle = `rgba(255,255,255,${0.5 * a})`;
+      g.lineWidth = 2;
+      for (const r of [22, 40]){
+        g.beginPath(); g.arc(0, 0, r, -0.9 + p * 0.4, 0.9); g.stroke();
+      }
+      // tip spark
+      g.fillStyle = `rgba(255,255,255,${a})`;
+      g.beginPath(); g.arc(Math.cos(0.95) * 32, Math.sin(0.95) * 32, 4 * a + 1, 0, 7); g.fill();
     });
     // impact: flash + radial spikes + ring
     FXBOOK.impact = flip(7, 56, (g, p) => {
@@ -149,7 +160,22 @@ const SPR = (() => {
       g.beginPath(); g.arc(0, 0, p * 22 + 3, 0, 7); g.stroke();
     });
     // blast: violet plasma explosion
-    FXBOOK.blast = flip(8, 72, (g, p) => {
+    FXBOOK.blast = flip(10, 96, (g, p) => {
+      if (p < 0.18){ // opening frame: white concussion flash
+        g.fillStyle = `rgba(255,255,255,${1 - p / 0.18})`;
+        g.beginPath(); g.arc(0, 0, 26, 0, 7); g.fill();
+      }
+      { // double shockwave rings
+        const a2 = 1 - p;
+        g.strokeStyle = `rgba(255,255,255,${a2 * 0.7})`;
+        g.lineWidth = 2.5;
+        g.beginPath(); g.arc(0, 0, 8 + p * 40, 0, 7); g.stroke();
+        g.strokeStyle = `rgba(205,180,255,${a2 * 0.5})`;
+        g.beginPath(); g.arc(0, 0, 4 + p * 28, 0, 7); g.stroke();
+      }
+      return blastInner(g, p);
+    });
+    function blastInner(g, p){
       const a = 1 - p;
       const grd = g.createRadialGradient(0, 0, 1, 0, 0, 12 + p * 16);
       grd.addColorStop(0, `rgba(255,255,255,${a})`);
@@ -165,7 +191,7 @@ const SPR = (() => {
         const ang = i * 1.26 + p * 2;
         g.beginPath(); g.arc(Math.cos(ang) * p * 22, Math.sin(ang) * p * 22, 6 * a + 1, 0, 7); g.fill();
       }
-    });
+    }
     // soulburst: death — expanding ring + wisps spiraling up
     FXBOOK.soulburst = flip(8, 72, (g, p) => {
       const a = 1 - p;
@@ -460,10 +486,14 @@ const SPR = (() => {
   };
   function actorCanvas(kind, dir, step, mode, eq){
     // 64×64 detailed body with VISIBLE EQUIPMENT (paperdoll layers)
-    // mode: 'bare' (mid-swing, hands empty) · 'rod' (fishing) · falsy (weapons)
+    // mode: falsy | 'bare' | 'rod' | 'attack0' (windup) | 'attack1' (strike)
+    //       | 'cast' (arms raised) | 'flinch' (hurt recoil)
     // eq: {helm,chest,pants,boots,gloves,cape,amulet,w1,w2} -> rarity|null
     eq = eq || {};
-    const bare = !!mode;
+    const atk = mode === 'attack0' ? 1 : mode === 'attack1' ? 2 : 0;
+    const cast = mode === 'cast';
+    const flinch = mode === 'flinch';
+    const bare = mode === 'bare' || !!atk;   // swung staff is drawn as the arc overlay
     const o = OUTFITS[kind] || OUTFITS.rival;
     const c = cv(64,64), x = c.getContext('2d');
     const flip = dir === 2;
@@ -545,11 +575,26 @@ const SPR = (() => {
     const handC = eq.gloves != null ? MET : o.skin;
     if (side){
       x.fillStyle = sh(o.robe, .5); x.fillRect(bx+2, 30, 4, 13);
-      x.fillStyle = o.robe2;        x.fillRect(bx+bw-8, 30 + sw, 12, 7);
-      x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-8, 35 + sw, 12, 2);
-      x.fillStyle = eq.gloves != null ? rc(eq.gloves) : o.trim;
-      x.fillRect(bx+bw+1, 30 + sw, 3, 7);
-      x.fillStyle = handC; x.fillRect(bx+bw+4, 31 + sw, 4, 5);
+      if (atk === 1){            // WINDUP: arm cocked back high
+        x.fillStyle = o.robe2;        x.fillRect(bx+bw-12, 24, 10, 7);
+        x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-12, 29, 10, 2);
+        x.fillStyle = handC;          x.fillRect(bx+bw-4, 22, 5, 5);
+      } else if (atk === 2){     // STRIKE: arm rammed fully forward
+        x.fillStyle = o.robe2;        x.fillRect(bx+bw-6, 30, 16, 7);
+        x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-6, 35, 16, 2);
+        x.fillStyle = eq.gloves != null ? rc(eq.gloves) : o.trim;
+        x.fillRect(bx+bw+7, 30, 3, 7);
+        x.fillStyle = handC;          x.fillRect(bx+bw+10, 31, 5, 5);
+      } else if (cast){          // CAST: arm thrust skyward
+        x.fillStyle = o.robe2;        x.fillRect(bx+bw-6, 14, 7, 16);
+        x.fillStyle = handC;          x.fillRect(bx+bw-5, 9, 5, 5);
+      } else {
+        x.fillStyle = o.robe2;        x.fillRect(bx+bw-8, 30 + sw, 12, 7);
+        x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-8, 35 + sw, 12, 2);
+        x.fillStyle = eq.gloves != null ? rc(eq.gloves) : o.trim;
+        x.fillRect(bx+bw+1, 30 + sw, 3, 7);
+        x.fillStyle = handC; x.fillRect(bx+bw+4, 31 + sw, 4, 5);
+      }
       if (kind === 'player' && !bare){
         const stx = bx + bw + 6;
         x.fillStyle = '#6d4528';    x.fillRect(stx, 10, 4, 48);
@@ -634,7 +679,13 @@ const SPR = (() => {
         x.fillStyle = lite(hr);    x.fillRect(17, 4, 30, 2);
         x.fillStyle = sh(hr, .7);  x.fillRect(16, 10, 32, 2);
       }
-      if (side){
+      if (flinch){
+        x.fillStyle = dark;   // eyes screwed shut, teeth gritted
+        if (side){ x.fillRect(36, 17, 6, 2); }
+        else { x.fillRect(23, 17, 6, 2); x.fillRect(35, 17, 6, 2); }
+        x.fillStyle = '#f4f0e4'; x.fillRect(side ? 34 : 27, 24, side ? 7 : 10, 3);
+        x.fillStyle = dark; x.fillRect(side ? 36 : 29, 24, 1, 3); x.fillRect(side ? 39 : 33, 24, 1, 3);
+      } else if (side){
         x.fillStyle = '#f4f0e4'; x.fillRect(36, 15, 5, 5);
         x.fillStyle = dark;      x.fillRect(38, 16, 3, 4);
         x.fillStyle = sh(o.skin, .8); x.fillRect(43, 20, 2, 3);
