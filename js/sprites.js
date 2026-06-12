@@ -330,20 +330,50 @@ const SPR = (() => {
     if (cache[k]) return cache[k];
     const c = cv(16,16), x = c.getContext('2d');
     const col = RARITIES[rar].col;
-    if (slot === 'staff'){
-      x.strokeStyle = '#8a5a3a'; x.lineWidth = 2;
-      x.beginPath(); x.moveTo(4,13); x.lineTo(11,4); x.stroke();
-      x.fillStyle = col; x.fillRect(10,2,4,4);
-      x.fillStyle = '#fff8'; x.fillRect(11,3,1,1);
-    } else if (slot === 'robe'){
-      x.fillStyle = '#3a3050'; x.fillRect(4,3,8,11);
-      x.fillRect(2,4,3,5); x.fillRect(11,4,3,5);
-      x.fillStyle = col; x.fillRect(4,3,8,2); x.fillRect(7,5,2,8);
-    } else { // charm
-      x.strokeStyle = '#8a8268'; x.lineWidth = 1;
-      x.beginPath(); x.arc(8,6,4,Math.PI,0); x.stroke();
-      x.fillStyle = col; x.beginPath(); x.arc(8,10,4,0,7); x.fill();
-      x.fillStyle = '#fff8'; x.fillRect(7,9,1,1);
+    switch (slot){
+      case 'weapon': case 'staff':
+        x.strokeStyle = '#8a5a3a'; x.lineWidth = 2;
+        x.beginPath(); x.moveTo(4,13); x.lineTo(11,4); x.stroke();
+        x.fillStyle = col; x.fillRect(10,2,4,4);
+        x.fillStyle = '#fff8'; x.fillRect(11,3,1,1);
+        break;
+      case 'helm':
+        x.fillStyle = '#3a3050'; x.fillRect(3,5,10,7);
+        x.fillStyle = col; x.fillRect(3,4,10,3);
+        x.fillStyle = '#17131f'; x.fillRect(5,9,6,2);
+        x.fillStyle = '#3a3050'; x.fillRect(7,2,2,3);
+        break;
+      case 'chest': case 'robe':
+        x.fillStyle = '#3a3050'; x.fillRect(4,3,8,11);
+        x.fillRect(2,4,3,5); x.fillRect(11,4,3,5);
+        x.fillStyle = col; x.fillRect(4,3,8,2); x.fillRect(7,5,2,8);
+        break;
+      case 'pants':
+        x.fillStyle = '#3a3050'; x.fillRect(4,3,8,4);
+        x.fillRect(4,7,3,7); x.fillRect(9,7,3,7);
+        x.fillStyle = col; x.fillRect(4,3,8,2);
+        break;
+      case 'boots':
+        x.fillStyle = '#3a3050'; x.fillRect(5,3,4,8);
+        x.fillRect(5,11,7,3);
+        x.fillStyle = col; x.fillRect(5,3,4,2); x.fillRect(9,12,3,2);
+        break;
+      case 'gloves':
+        x.fillStyle = '#3a3050'; x.fillRect(5,4,6,8);
+        x.fillRect(3,7,3,4);
+        x.fillStyle = col; x.fillRect(5,11,6,3);
+        break;
+      case 'ring':
+        x.strokeStyle = col; x.lineWidth = 2;
+        x.beginPath(); x.arc(8,9,4,0,7); x.stroke();
+        x.fillStyle = col; x.fillRect(6,2,4,4);
+        x.fillStyle = '#fff8'; x.fillRect(7,3,1,1);
+        break;
+      default: // amulet / charm
+        x.strokeStyle = '#8a8268'; x.lineWidth = 1;
+        x.beginPath(); x.arc(8,6,4,Math.PI,0); x.stroke();
+        x.fillStyle = col; x.beginPath(); x.arc(8,10,4,0,7); x.fill();
+        x.fillStyle = '#fff8'; x.fillRect(7,9,1,1);
     }
     cache[k] = c;
     return c;

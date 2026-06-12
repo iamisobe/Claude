@@ -683,7 +683,6 @@ const Systems = (() => {
   }
 
   // ---------- character sheet (MMO style) ----------
-  const SLOT_ORDER = ['staff','robe','charm'];
   function salvageGold(g){ return 30 + g.lvl * 8 + g.rar * 60; }
   function affixHTML(g, cls = 'aff'){
     return Object.entries(g.aff).map(([k,v]) =>
@@ -694,7 +693,7 @@ const Systems = (() => {
       const p = $('panel');
       let sel = 0; // 0..2 = equipped slots, 3+ = bag
       const list = () => [
-        ...SLOT_ORDER.map(s => ({ eq:true, slot:s, g:G.gear.equip[s] })),
+        ...EQUIP_KEYS.map(k => ({ eq:true, key:k, slot:keySlot(k), g:G.gear.equip[k] })),
         ...G.gear.bag.map((g, i) => ({ eq:false, i, g })),
       ];
 
@@ -703,7 +702,7 @@ const Systems = (() => {
         const base = [
           ['Life', `${Math.ceil(G.pc.hp)}/${ps.maxhp}`],
           ['Soul', `${Math.floor(G.pc.soul)}/${ps.maxsoul}`],
-          ['Staff damage', Math.round(ps.melee)],
+          ['Melee damage', Math.round(ps.melee)],
           ['Hex bolt', Math.round(ps.bolt)],
           ['Move speed', Math.round(ps.speed)],
           ['Soul regen', ps.regen.toFixed(1) + '/s'],
@@ -722,9 +721,10 @@ const Systems = (() => {
           ${it.eq ? '<span class="tag" style="color:#6dd86d">WORN</span>' : ''}
           ${affixHTML(g)}`;
         if (!it.eq){
-          const cur = G.gear.equip[g.slot];
-          html += `<div class="cmp dim">${cur
-            ? `Worn now: <b style="color:${RARITIES[cur.rar].col}">${cur.name}</b>${affixHTML(cur)}`
+          const worn = EQUIP_KEYS.filter(k => keySlot(k) === g.slot).map(k => G.gear.equip[k]).filter(Boolean);
+          html += `<div class="cmp dim">${worn.length
+            ? 'Worn now: ' + worn.map(cur =>
+                `<b style="color:${RARITIES[cur.rar].col}">${cur.name}</b>${affixHTML(cur)}`).join('')
             : 'Nothing worn in that slot.'}</div>`;
         }
         html += `<div class="gd-btns">` +
@@ -740,13 +740,16 @@ const Systems = (() => {
         const it = items[sel];
         if (!it || !it.g) return;
         if (action === 'equip' && !it.eq){
-          const old = G.gear.equip[it.g.slot];
-          G.gear.equip[it.g.slot] = it.g;
+          // weapons and rings have two slots: fill an empty hand/finger first
+          const keys = EQUIP_KEYS.filter(k => keySlot(k) === it.g.slot);
+          const key = keys.find(k => !G.gear.equip[k]) || keys[0];
+          const old = G.gear.equip[key];
+          G.gear.equip[key] = it.g;
           G.gear.bag.splice(it.i, 1);
           if (old) G.gear.bag.push(old);
           UI.toast(`Equipped ${it.g.name}.`);
           G.pc.hp = Math.min(G.pc.hp, Combat.pstats().maxhp);
-          sel = SLOT_ORDER.indexOf(it.g.slot);
+          sel = EQUIP_KEYS.indexOf(key);
         } else if (action === 'salvage' && !it.eq){
           G.gold += salvageGold(it.g);
           G.gear.bag.splice(it.i, 1);
@@ -754,7 +757,7 @@ const Systems = (() => {
           sel = Math.min(sel, list().length - 1);
         } else if (action === 'unequip' && it.eq){
           if (G.gear.bag.length >= 60) return UI.toast('Gear bag full.');
-          G.gear.equip[it.slot] = null;
+          G.gear.equip[it.key] = null;
           G.gear.bag.push(it.g);
           UI.toast(`Unequipped ${it.g.name}.`);
         }
@@ -767,8 +770,9 @@ const Systems = (() => {
         p.innerHTML = `<h2>CHARACTER — Necromancy Lv.${skillLvl('necromancy')}</h2>
           <div class="char-top">
             <div class="paperdoll">
+              <div class="eq-col" id="eq-left"></div>
               <canvas class="pc" width="16" height="16"></canvas>
-              <div class="eq-col" id="eq-col"></div>
+              <div class="eq-col" id="eq-right"></div>
             </div>
             <div class="char-stats">${statsHTML()}</div>
           </div>
@@ -777,7 +781,7 @@ const Systems = (() => {
           <div class="gear-detail" id="gear-detail">${detailHTML(items[sel])}</div>
           <div class="panel-foot">${IS_TOUCH ? '☰: close' : 'X / Esc: close'}</div>`;
         p.querySelector('.pc').getContext('2d').drawImage(SPR.actor('player', 0, 0), 0, 0);
-        const eqCol = p.querySelector('#eq-col');
+        const LEFT = ['helm','chest','pants','boots','gloves'];
         items.forEach((it, idx) => {
           const cell = document.createElement('div');
           cell.className = (it.eq ? 'eq-slot' : 'gcell') + (idx === sel ? ' sel' : '');
@@ -790,7 +794,7 @@ const Systems = (() => {
           }
           if (it.eq){
             cell.insertAdjacentHTML('beforeend', `<span class="sl-name">${it.slot.toUpperCase()}</span>`);
-            eqCol.appendChild(cell);
+            p.querySelector(LEFT.includes(it.key) ? '#eq-left' : '#eq-right').appendChild(cell);
           } else p.querySelector('#gear-grid').appendChild(cell);
           // hover (desktop) and tap (mobile) both inspect
           cell.addEventListener('mouseenter', () => { if (sel !== idx){ sel = idx; render(); } });
@@ -806,8 +810,10 @@ const Systems = (() => {
         if (k === 'no'){ p.classList.add('hidden'); Input.pop(h); return res(); }
         if (k === 'left'){ sel = (sel + n - 1) % n; render(); }
         else if (k === 'right'){ sel = (sel + 1) % n; render(); }
-        else if (k === 'up'){ sel = sel >= 3 + cols() ? sel - cols() : Math.max(0, sel - 3); render(); }
-        else if (k === 'down'){ sel = sel < 3 ? 3 : Math.min(n - 1, sel + cols()); render(); }
+        else if (k === 'up'){ const ne = EQUIP_KEYS.length;
+          sel = sel >= ne + cols() ? sel - cols() : Math.max(0, sel - ne); render(); }
+        else if (k === 'down'){ const ne = EQUIP_KEYS.length;
+          sel = sel < ne ? ne : Math.min(n - 1, sel + cols()); render(); }
         else if (k === 'ok'){
           const it = list()[sel];
           if (!it || !it.g) return;

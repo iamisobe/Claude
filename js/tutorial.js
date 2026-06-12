@@ -89,7 +89,7 @@ const Tutorial = (() => {
       intro:['The dead drop more than dust — staves, robes, charms, each with its own blessings.',
         `I have given you a piece to start. Open ${K.menu} → CHARACTER, inspect it, and EQUIP it.`,
         'Common is white, CURSED is blue, ELDRITCH is gold with three blessings. Salvage what you do not want.'],
-      check: () => !!(G.gear.equip.staff || G.gear.equip.robe || G.gear.equip.charm) },
+      check: () => EQUIP_KEYS.some(k => G.gear.equip[k]) },
 
     { icon:'♛', obj:'Visit Master Grell at the arena (east building) and view the Soul Ladder.',
       intro:['One last introduction. Master Grell keeps the SOUL LADDER — duels against every necromancer in the valley.',

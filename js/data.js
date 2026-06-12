@@ -545,25 +545,38 @@ const AFFIXES = {
   gold:    { n:'+#% gold found',      base:10, per:2.0 },
   xp:      { n:'+#% grim XP',         base:6,  per:1.2 },
 };
-const GEAR_BASES = {
-  staff: ['Femur Rod','Willow Staff','Grave Sceptre','Hollow Crook'],
-  robe:  ['Mourning Robe','Grave Shroud','Moth Cloak','Pale Vestment'],
-  charm: ['Knuckle Charm','Moon Locket','Wax Seal','Ghost Bell'],
+// full MMO slot set; each slot favors thematic affixes on its first roll
+const GEAR_SLOTS = {
+  weapon: { bases:['Femur Rod','Willow Staff','Grave Sceptre','Hollow Crook','Bone Scythe','Barrow Blade'], pref:['dmg','bolt','minion'] },
+  helm:   { bases:["Bone Helm","Mourner's Hood",'Skull Cap','Moth Crown'],            pref:['soul','xp','regen'] },
+  chest:  { bases:['Mourning Robe','Grave Shroud','Moth Cloak','Pale Vestment'],      pref:['hp','hp','minion'] },
+  pants:  { bases:['Gravewalker Leggings','Sodden Trousers','Marsh Greaves','Pale Breeches'], pref:['hp','speed','regen'] },
+  boots:  { bases:['Mud Boots','Crypt Striders','Wisp Slippers','Iron-shod Boots'],   pref:['speed','speed','gold'] },
+  gloves: { bases:["Digger's Gloves",'Bone Knuckles','Silk Mitts','Ashen Grips'],     pref:['dmg','capture','bolt'] },
+  amulet: { bases:['Moon Locket','Wax Seal','Ghost Bell','Knuckle Charm'],            pref:['capture','minion','gold'] },
+  ring:   { bases:['Wormwood Band','Vein Ring','Moon Loop','Sealed Signet'],          pref:['gold','xp','bolt','capture'] },
 };
+// what your body actually wears (two ring fingers)
+// two hands, two ring fingers — dual wielding welcome
+const EQUIP_KEYS = ['weapon1','weapon2','helm','chest','pants','boots','gloves','amulet','ring1','ring2'];
+const keySlot = k => k.startsWith('ring') ? 'ring' : k.startsWith('weapon') ? 'weapon' : k;
 const GEAR_PREFIX = ['Whispering','Sodden','Cursed','Moonlit','Smouldering','Rotten','Gleaming','Wormy','Sainted','Umbral'];
 const RARITIES = [
   { n:'common',   col:'#cdc4e8', affixes:1 },
   { n:'cursed',   col:'#5d8ae8', affixes:2 },
   { n:'eldritch', col:'#e8c95d', affixes:3 },
 ];
-function rollGear(zoneLvl){
-  const slot = ['staff','robe','charm'][rnd(3)];
+function rollGear(zoneLvl, slot){
+  const slots = Object.keys(GEAR_SLOTS);
+  slot = slot || slots[rnd(slots.length)];
+  const S = GEAR_SLOTS[slot];
   const r = Math.random();
   const rar = r < 0.08 ? 2 : r < 0.35 ? 1 : 0;
   const keys = Object.keys(AFFIXES);
   const aff = {};
   for (let i = 0; i <= rar; i++){
-    const k = keys[rnd(keys.length)];
+    // first affix leans into the slot's specialty; extras roll anywhere
+    const k = i === 0 ? S.pref[rnd(S.pref.length)] : keys[rnd(keys.length)];
     const A = AFFIXES[k];
     let v = Math.round((A.base + A.per * zoneLvl) * (0.7 + Math.random() * 0.6));
     if (A.cap) v = Math.min(A.cap, v);
@@ -571,16 +584,30 @@ function rollGear(zoneLvl){
   }
   return {
     slot, rar, lvl: zoneLvl, aff,
-    name: (rar > 0 ? GEAR_PREFIX[rnd(GEAR_PREFIX.length)] + ' ' : '') + GEAR_BASES[slot][rnd(4)],
+    name: (rar > 0 ? GEAR_PREFIX[rnd(GEAR_PREFIX.length)] + ' ' : '') + S.bases[rnd(S.bases.length)],
   };
 }
-function gearAffix(key){ // sum of an affix across equipped gear
+function gearAffix(key){ // sum of an affix across everything worn
   let v = 0;
-  for (const s of ['staff','robe','charm']){
-    const g = G.gear.equip[s];
+  for (const k of EQUIP_KEYS){
+    const g = G.gear.equip[k];
     if (g && g.aff[key]) v += g.aff[key];
   }
   return v;
+}
+// old saves wore {staff, robe, charm}
+function migrateGear(){
+  const e = G.gear.equip;
+  const fix = g => { if (g){
+    if (g.slot === 'robe') g.slot = 'chest';
+    if (g.slot === 'charm') g.slot = 'amulet';
+    if (g.slot === 'staff') g.slot = 'weapon'; } };
+  if ('robe' in e){ fix(e.robe); e.chest = e.chest || e.robe; delete e.robe; }
+  if ('charm' in e){ fix(e.charm); e.amulet = e.amulet || e.charm; delete e.charm; }
+  if ('staff' in e){ fix(e.staff); e.weapon1 = e.weapon1 || e.staff; delete e.staff; }
+  for (const k of EQUIP_KEYS) if (!(k in e)) e[k] = null;
+  Object.values(e).forEach(fix);
+  G.gear.bag.forEach(fix);
 }
 
 // ---------- BUILDABLE PLOTS (Deeds system; unlocks after the manor tutorial) ----------

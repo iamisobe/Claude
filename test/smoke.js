@@ -156,7 +156,7 @@ vm.runInContext(`(${function tests(check){
   // gear rolls are sane
   for (let i = 0; i < 40; i++){
     const g = rollGear(1 + i % 30);
-    check(`gear roll ${i}: valid`, ['staff','robe','charm'].includes(g.slot)
+    check(`gear roll ${i}: valid`, Object.keys(GEAR_SLOTS).includes(g.slot)
       && Object.keys(g.aff).length >= 1 && Object.keys(g.aff).every(k => AFFIXES[k])
       && g.rar >= 0 && g.rar <= 2, JSON.stringify(g));
   }

@@ -12,7 +12,7 @@ function freshGame(){
     pc: { hp: 50, soul: 25, atkCd: 0, boltCd: 0, inv: 0, swing: 0 },
     party: [], storage: [],
     bag: { jar: 5, tonic: 3, seed_blood: 2 },
-    gear: { equip: { staff: null, robe: null, charm: null }, bag: [] },
+    gear: { equip: Object.fromEntries(EQUIP_KEYS.map(k => [k, null])), bag: [] },
     houses: {},
     dex: {}, skills: {}, farm: {},
     manor: { restored: {}, furniture: [] },
@@ -70,7 +70,8 @@ function continueGame(){
   G.flags = G.flags || { chests: {} };
   G.flags.chests = G.flags.chests || {};
   G.pc = G.pc || { hp: 50, soul: 25, atkCd: 0 };
-  G.gear = G.gear || { equip: { staff: null, robe: null, charm: null }, bag: [] };
+  G.gear = G.gear || { equip: {}, bag: [] };
+  migrateGear();
   G.houses = G.houses || {};
   $('title').classList.add('hidden');
   World.enter(G.pos.map, G.pos.x, G.pos.y);
