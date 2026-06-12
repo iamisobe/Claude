@@ -275,7 +275,7 @@ const Combat = (() => {
     return tiers[tiers.length - 1];
   }
   function catchChance(e, jarId){
-    const houseB = 0.05 * plotTier('moontower') + (e.hooked ? 0.06 * plotTier('shore') : 0);
+    const houseB = 0.05 * plotTier('moontower');
     const skillB = 1 + 0.015 * (Systems.skillLvl('necromancy') - 1) + gearAffix('capture')/100 + houseB;
     let c = ((3*e.maxhp - 2*e.hp) / (3*e.maxhp)) * (DEX[e.sp].catch / 255) * ITEMS[jarId].mult * skillB;
     return Math.min(0.95, c);
@@ -470,7 +470,7 @@ const Combat = (() => {
     d.ttl -= dt;
     if (d.ttl <= 0){ ents = ents.filter(x => x !== d); return; }
     const dd = Math.hypot(d.x-World.ppx, d.y-World.ppy);
-    if (dd < 90){ d.x += (World.ppx-d.x)*4*dt; d.y += (World.ppy-d.y)*4*dt; } // magnet
+    if (dd < 140){ d.x += (World.ppx-d.x)*4*dt; d.y += (World.ppy-d.y)*4*dt; } // magnet
     if (dd < 26){
       if (d.gold){ G.gold += d.gold; floater(World.ppx, World.ppy-30, '+'+d.gold+'⛁', '#e8c95d'); }
       else if (d.item){ Inv.add(d.item, d.n); UI.toast(`Picked up ${ITEMS[d.item].n}.`); }

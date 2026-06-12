@@ -285,14 +285,32 @@ const Systems = (() => {
       skillAdd('fishing', 4);
       return UI.toast('The line goes slack — it escapes into the dark.');
     }
+    // CAUGHT! The rod did the work — now choose its fate.
+    G.dex[e.sp] = Math.max(G.dex[e.sp] || 0, 1);
     skillAdd('fishing', 14 + lvl + (DEX[e.sp].rare ? 50 : 0));
-    // the catch leaps out of the water ONTO LAND beside you — never stranded in the lake
-    let sx = World.ppx, sy = World.ppy - 34;
-    for (const [ox, oy] of [[0,-44],[44,0],[-44,0],[0,44],[34,-34],[-34,-34],[0,0]]){
-      if (!World.solidPx(World.ppx + ox, World.ppy + oy)){ sx = World.ppx + ox; sy = World.ppy + oy; break; }
+    const itemId = 'fish_' + e.sp;
+    await UI.say(`You haul it onto the bank — a ${DEX[e.sp].n} (Lv.${lvl})${DEX[e.sp].rare ? ', a LEGEND of the deep!' : '!'}`);
+    const jarId = ['jar','gjar','ajar'].find(id => Inv.count(id) > 0);
+    const opts = [`Keep the catch — ${ITEMS[itemId].n}`];
+    if (jarId) opts.push(`Bind it into your pack (uses 1 ${ITEMS[jarId].n})`);
+    const c = await UI.choice(opts, { cancelable:false });
+    if (c === 1 && jarId){
+      Inv.take(jarId, 1);
+      const g = makeGrim(e.sp, lvl);
+      G.dex[e.sp] = 2;
+      skillAdd('necromancy', 20 + lvl * 2);
+      if (G.party.length < Combat.minionCap()){
+        G.party.push(g);
+        Combat.syncMinions();
+        UI.toast(`★ ${g.nick} (Lv.${lvl}) slips into the jar and rises to fight for you!`);
+      } else {
+        G.storage.push(g);
+        UI.toast(`★ ${g.nick} (Lv.${lvl}) bound — sent to storage (pack is full).`);
+      }
+    } else {
+      Inv.add(itemId, 1);
+      UI.toast(`${ITEMS[itemId].n} added to your satchel. Eli buys catches — or renders them.`);
     }
-    Combat.spawnEnemy(e.sp, lvl, { x: sx, y: sy, aggro: true, hooked: true });
-    UI.toast(`LANDED: a ${DEX[e.sp].n} (Lv.${lvl})${DEX[e.sp].rare ? ' — a LEGEND of the deep!' : '!'} It bursts onto the bank, furious!`);
   }
 
   // ---------- manor (the housing tutorial) ----------
@@ -748,6 +766,7 @@ const Systems = (() => {
       await UI.say(tips[rnd(tips.length)], 'Witch Morwen');
     }
   }
+  function eliPrice(id){ return Math.round(ITEMS[id].price * (1 + 0.10 * plotTier('shore'))); }
   async function fisherTalk(){
     if (!G.flags.metEli){
       G.flags.metEli = true;
@@ -755,15 +774,48 @@ const Systems = (() => {
       return UI.say(['"New blood! The lake\'s full of drowned things that bite."',
         '"Here — my old rod and some grubs. Face the water, press the button, and WAIT. Patience is the whole sport."',
         '"Ignore the nibbles. When the bobber PLUNGES — strike! Then HOLD ON and keep the brute in the green while you reel."',
-        '"Fair warning: what you land comes up ANGRY. Beat it, then jar it if you fancy it."'], 'Fisher Eli');
+        '"Whatever you land: keep it and I\'ll BUY it at full price, RENDER it into useful stuff... or jar it for your pack."'], 'Fisher Eli');
     }
-    const tips = [
-      '"Phantfin only rise at night. Lanternjaw? New moon, Bone Rod or better."',
-      '"They whisper of the MOONSCALE — full moon, Abyss Rod, Fishing 15. A living legend."',
-      '"A Lakeside Pier of your own makes the rare ones bite. A Shore Cottage makes them easier to jar."',
-      '"Your Fishing level widens the catch-window. Even an old eel like me started clumsy."',
-    ];
-    return UI.say(tips[rnd(tips.length)], 'Fisher Eli');
+    for(;;){
+      const c = await UI.choice(['Sell my catch', 'Render a catch', 'Any advice?', 'Goodbye']);
+      if (c === -1 || c === 3) return;
+      if (c === 0){
+        for(;;){
+          const es = UI.bagEntries(it => it.k === 'fish');
+          const i = await UI.panelList(`ELI BUYS — your gold: ${G.gold}⛁${plotTier('shore') ? ` (shore cottage +${10*plotTier('shore')}%)` : ''}`,
+            es.map(e => ({ html:`<b>${ITEMS[e.id].n}</b> ×${e.n} — Eli pays ${eliPrice(e.id)}⛁ each` })),
+            { footer: es.length ? 'Z: sell one · X: back' : 'Catch something first!' });
+          if (i < 0) break;
+          const id = es[i].id;
+          Inv.take(id, 1);
+          G.gold += eliPrice(id);
+          UI.toast(`Sold ${ITEMS[id].n} for ${eliPrice(id)}⛁.`);
+          UI.hud();
+        }
+      } else if (c === 1){
+        for(;;){
+          const es = UI.bagEntries(it => it.k === 'fish');
+          const i = await UI.panelList('RENDER A CATCH INTO RESOURCES', es.map(e => ({
+            html:`<b>${ITEMS[e.id].n}</b> ×${e.n} → ${Object.entries(FISH_YIELD[e.id] || {}).map(([k,n]) => `${n}× ${ITEMS[k].n}`).join(' + ')}`,
+          })), { footer: es.length ? 'Z: render one · X: back' : 'Catch something first!' });
+          if (i < 0) break;
+          const id = es[i].id;
+          Inv.take(id, 1);
+          const out = Object.entries(FISH_YIELD[id] || {});
+          out.forEach(([k, n]) => Inv.add(k, n));
+          skillAdd('fishing', 5);
+          UI.toast(`Rendered: ${out.map(([k,n]) => `${n}× ${ITEMS[k].n}`).join(', ')}.`);
+        }
+      } else if (c === 2){
+        const tips = [
+          '"Phantfin only rise at night. Lanternjaw? New moon, Bone Rod or better."',
+          '"They whisper of the MOONSCALE — full moon, Abyss Rod, Fishing 15. Worth 600 coin... or two lumps of ectoplasm."',
+          '"A Lakeside Pier of your own makes the rare ones bite. A Shore Cottage makes me pay better."',
+          '"Phantfin render into ectoplasm — cheaper than the shop ever sells it. Builders fish, friend."',
+        ];
+        await UI.say(tips[rnd(tips.length)], 'Fisher Eli');
+      }
+    }
   }
   async function diggerTalk(){
     if (!G.flags.metDigger){

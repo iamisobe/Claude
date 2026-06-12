@@ -44,8 +44,8 @@ const Tutorial = (() => {
     { icon:'🎣', obj:'Cast (A at the water), wait for the "!", strike, then HOLD A to reel it in!',
       intro:['Rod in hand! Stand at the water\'s edge, FACE the water, and press A to cast.',
         'Then WAIT. The bobber will twitch — ignore the little nibbles. When it PLUNGES and you see "!", strike fast with A!',
-        'Then the fight: HOLD A to lift the hook, let go to drop it. Keep the fish inside the green band until the CATCH meter fills.',
-        'Whatever you land comes up ANGRY — beat it, jar it if you fancy it. Some fish bite only at night; the rarest under a new or full moon.'],
+        'Then HOLD A to lift the hook, let go to drop it. Keep the fish inside the green band until the CATCH meter fills — and it\'s yours.',
+        'Every catch is yours to use: SELL it to Eli, have him RENDER it into bait and building reagents, or bind it into your pack with a jar. The rarest fish bite only at night or under a new or full moon.'],
       check: () => (G.skills.fishing || 0) > 0 },
 
     { icon:'☘', obj:'Plant a seed: walk to the farm plots (north-east, by the fence) and press A at a soil plot.',

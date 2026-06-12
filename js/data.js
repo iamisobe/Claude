@@ -409,6 +409,11 @@ const ITEMS = {
   oldrod:   { n:'Old Rod',    k:'rod', tier:1, price:0,    d:'A mossy rod. Catches common drowned things.' },
   bonerod:  { n:'Bone Rod',   k:'rod', tier:2, price:1500, d:'Carved from a Boneel spine. Finer catches.' },
   abyssrod: { n:'Abyss Rod',  k:'rod', tier:3, price:5000, d:'Its line dips into somewhere else.' },
+  fish_murkoi:     { n:'Murkoi (catch)',     k:'fish', price:45,  d:'A pale crypt koi. Sell it, or let Eli render it down.' },
+  fish_phantfin:   { n:'Phantfin (catch)',   k:'fish', price:90,  d:'Cold to the touch. Eli renders these into ectoplasm.' },
+  fish_boneel:     { n:'Boneel (catch)',     k:'fish', price:110, d:'Mostly spine. Renders into good building stone.' },
+  fish_lanternjaw: { n:'Lanternjaw (catch)', k:'fish', price:180, d:'Its lure still glows. Renders into glow bait.' },
+  fish_moonscale:  { n:'Moonscale (catch)',  k:'fish', price:600, d:'A legend, landed. Worth a fortune — or rare reagents.' },
   plank: { n:'Old Plank',  k:'mat', price:50,  d:'Salvaged manor timber.' },
   stone: { n:'Crypt Stone',k:'mat', price:80,  d:'A solid block of grave-granite.' },
   ecto:  { n:'Ectoplasm',  k:'mat', price:200, d:'Wobbles. Essential for haunted renovation.' },
@@ -445,6 +450,17 @@ const BREWS = [
   { out:'voidbait',  ins:{ gravefruit:1, moonwheat:1 } },
   { out:'revive',    ins:{ bloodberry:2, gravefruit:2, moonwheat:2 } },
 ];
+
+// ---------- FISH AS LOOT ----------
+// every landed-and-defeated fish drops its carcass: sell it (Eli pays
+// full price; the shop pays half) or have Eli render it into resources
+const FISH_YIELD = {
+  fish_murkoi:     { worm: 2 },
+  fish_phantfin:   { ecto: 1 },
+  fish_boneel:     { stone: 2 },
+  fish_lanternjaw: { glowbait: 3 },
+  fish_moonscale:  { ecto: 2, voidbait: 1 },
+};
 
 // ---------- FISHING ----------
 // rod: min rod tier. moon: 'new'|'full'. night: true = only 20:00-06:00.
@@ -584,7 +600,7 @@ const PLOTS = {
   pier:     { n:'Lakeside Pier',    map:'town',  x:33, y:19, land:9000,
     buff:'Rare fish bite +20% more per tier.' },
   shore:    { n:'Shore Cottage',    map:'town',  x:22, y:24, land:7000,
-    buff:'+6% capture odds on hooked fish per tier.' },
+    buff:'Eli pays +10% more for your catches per tier.' },
 };
 const PLOT_TIERS = [
   null,

@@ -192,6 +192,12 @@ vm.runInContext(`(${function tests(check){
     skillLevel(skillXpFor(50)) === 50 && skillXpFor(51) > skillXpFor(50));
   check('xp curve', xpForLevel(10) === 1000);
   const w = pickW([{w:1, id:'a'}]); check('pickW returns entry', w.id === 'a');
+  // fish economy: every fish species has a catch item and a render yield
+  for (const e of FISH_TABLE){
+    check(`fish item for ${e.sp} exists`, !!ITEMS['fish_' + e.sp]);
+    const y = FISH_YIELD['fish_' + e.sp];
+    check(`fish yield for ${e.sp} valid`, !!y && Object.keys(y).every(k => ITEMS[k]), JSON.stringify(y));
+  }
   // moon fish availability: at least one fish at rod 1, day, any moon
   const basePool = FISH_TABLE.filter(e => e.rod <= 1 && !e.night && !e.moon);
   check('rod-1 daytime fish exists', basePool.length >= 1);
