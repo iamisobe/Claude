@@ -84,6 +84,7 @@ const Systems = (() => {
       let qty = c.qty[0] + rnd(c.qty[1] - c.qty[0] + 1);
       if (Math.random() < 0.02 * skillLvl('farming')) { qty++; UI.toast('Bonus yield!'); }
       Inv.add(c.item, qty);
+      G.stats.crops = (G.stats.crops || 0) + 1;
       skillAdd('farming', FARM_XP[p.crop] || 10);
       await UI.say(`Harvested ${qty}× ${ITEMS[c.item].n}!`);
     } else {
@@ -148,7 +149,7 @@ const Systems = (() => {
       sc.drawImage(SPR.creature(sp), 0, 0);
       sc.globalCompositeOperation = 'source-in';
       sc.fillStyle = '#0d1320';
-      sc.fillRect(0, 0, 16, 16);
+      sc.fillRect(0, 0, 32, 32);
 
       $('fish-hint').textContent = IS_TOUCH
         ? 'HOLD the A button to lift the hook — keep the fish in the green!'
@@ -317,6 +318,7 @@ const Systems = (() => {
       Inv.add(itemId, 1);
       UI.toast(`${ITEMS[itemId].n} added to your satchel. Eli buys catches — or renders them.`);
     }
+    G.stats.fish = (G.stats.fish || 0) + 1;
   }
 
   // ---------- gathering: chop trees, quarry rock, mine ore ----------
@@ -346,6 +348,7 @@ const Systems = (() => {
     }
     if (t === 'Q' && Math.random() < 0.20 * plotTier('hillfort')) qty++;
     Inv.add(item, qty);
+    G.stats[item === 'plank' ? 'planks' : item] = (G.stats[item === 'plank' ? 'planks' : item] || 0) + qty;
     skillAdd('gathering', t === 'Q' ? ORE_XP[item] : N.xp);
     World.setTile(x, y, 'g');
     Combat.floatText(x*TILE + 24, y*TILE + 10, `+${qty} ${ITEMS[item].n}`, '#c9a86d');
@@ -414,6 +417,20 @@ const Systems = (() => {
   }
 
   async function storage(){
+    if (!G.manor.storageBuilt){
+      await UI.say(['The old storage chest is SPLINTERED — ribs of rotten wood and not much else.',
+        `Repairing it needs 2× ${ITEMS.plank.n}. Gnarled trees in Murkwood drop planks when chopped (face one, use the action button).`]);
+      if (Inv.count('plank') >= 2){
+        const c = await UI.choice(['Repair it (2 planks)','Not yet']);
+        if (c !== 0) return;
+        Inv.take('plank', 2);
+        G.manor.storageBuilt = true;
+        skillAdd('gathering', 10);
+        await UI.say('You hammer the planks home. The chest is whole — your grims can rest inside it now.');
+        save();
+      }
+      return;
+    }
     for(;;){
       const c = await UI.choice([`Deposit a grim (pack: ${G.party.length}/${Combat.minionCap()})`, `Withdraw a grim (box: ${G.storage.length})`, 'Close']);
       if (c === -1 || c === 2) return;
@@ -460,6 +477,7 @@ const Systems = (() => {
     let qty = 1;
     if (Math.random() < 0.02 * bl + 0.05 * plotTier('moontower')){ qty = 2; UI.toast('A perfect brew — double batch!'); }
     Inv.add(a.b.out, qty);
+    G.stats.brews = (G.stats.brews || 0) + 1;
     skillAdd('brewing', 20 + (SKILL_REQ.brew[a.b.out] || 1) * 6);
     await UI.say(`The cauldron belches green smoke. You bottle ${qty}× ${ITEMS[a.b.out].n}.`);
   }
@@ -867,6 +885,7 @@ const Systems = (() => {
           G.gold -= f.gold;
           const g = rollGear(f.lvl);
           G.gear.bag.push(g);
+          G.stats.forged = (G.stats.forged || 0) + 1;
           skillAdd('gathering', 15);
           await UI.say(`Odd hammers, quenches, mutters... ${RARITIES[g.rar].n.toUpperCase()}: ${g.name}! (in your gear bag)`);
         }
@@ -986,11 +1005,47 @@ const Systems = (() => {
     return UI.say(`"Deepest you've gone is floor ${G.cata.maxFloor || 0}. The dark remembers."`, 'Gravedigger');
   }
 
+  // ---------- the notice board (quest chain + endless bounty) ----------
+  function currentQuest(){
+    const i = G.quest.i || 0;
+    if (i < QUESTS.length) return QUESTS[i];
+    return bountyQuest(i - QUESTS.length + 1);
+  }
+  async function questBoard(){
+    for(;;){
+      const i = G.quest.i || 0;
+      const q = currentQuest();
+      const cur = Math.min(q.req, q.cur(G));
+      const done = cur >= q.req;
+      const rewardTxt = [`${q.reward.gold}⛁`]
+        .concat(Object.entries(q.reward.items || {}).map(([k,n]) => `${n}× ${ITEMS[k].n}`)).join(', ');
+      const rows = [
+        { html:`<b>TASK ${i + 1}: ${q.n}</b> ${done ? '<span class="tag" style="color:#6dd86d">COMPLETE</span>' : ''}<br>
+          <span class="dim">${q.d}</span><br>
+          Progress: <b>${cur}/${q.req}</b> · Reward: <span style="color:#e8c95d">${rewardTxt}</span>` },
+      ];
+      if (i > 0) rows.push({ html:`<span class="dim">${Math.min(i, QUESTS.length)} task${i>1?'s':''} completed. The ledger never truly ends.</span>`, dim:true });
+      const pick = await UI.panelList('THE NOTICE BOARD', rows,
+        { footer: done ? 'Z on the task: CLAIM the reward' : 'Come back when the task is done. X: close' });
+      if (pick < 0) return;
+      if (pick === 0 && done){
+        G.gold += q.reward.gold;
+        for (const [k, n] of Object.entries(q.reward.items || {})) Inv.add(k, n);
+        G.quest.i = i + 1;
+        if (currentQuest().bounty) G.quest.bountyBase = G.kills || 0;
+        UI.toast(`★ ${q.n} complete! +${rewardTxt}`);
+        save();
+      } else if (pick === 0){
+        UI.toast('Not finished yet.');
+      }
+    }
+  }
+
   // ---------- pause menu ----------
   async function pauseMenu(){
     if (G.tut) G.tut.menuOpened = true;
     for(;;){
-      const base = ['Pack', 'Character', 'Satchel', 'Skills', 'Deeds', 'Grimdex', 'Save'];
+      const base = ['Pack', 'Character', 'Satchel', 'Ledger', 'Skills', 'Deeds', 'Grimdex', 'Save'];
       const opts = Tutorial.active() ? base.concat(['Skip tutorial', 'Close']) : base.concat(['Close']);
       const c = await UI.choice(opts);
       const pick = c < 0 ? 'Close' : opts[c];
@@ -1049,6 +1104,7 @@ const Systems = (() => {
           else UI.toast(it.d || '...');
         }
       } else if (pick === 'Character') await gearMenu();
+      else if (pick === 'Ledger') await questBoard();
       else if (pick === 'Skills'){
         await UI.panelList('SKILLS', Object.entries(SKILLS).map(([k, s]) => {
           const lvl = skillLvl(k), xp = G.skills[k] || 0;
@@ -1091,6 +1147,6 @@ const Systems = (() => {
   return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish, fishingFx, gather,
     restore, placeFurniture, sleep, storage, cauldron, altar, manorDone,
     enterCata, descend, ascend, chest, arena, arenaExit, rivalDefeated, woodsDuel,
-    plotMenu, deedsMenu, gearMenu,
+    plotMenu, deedsMenu, gearMenu, questBoard,
     shop, witch, fisherTalk, diggerTalk, pauseMenu, save, load };
 })();

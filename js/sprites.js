@@ -238,6 +238,16 @@ const SPR = (() => {
       x.fillStyle='#3a4a5a'; x.fillRect(4,6,8,8);
       x.fillStyle='#8af0e8'; x.fillRect(6,3,4,5); x.fillRect(7,1,2,2);
       x.fillStyle='#d0fff8'; x.fillRect(7,4,2,2); });
+    tile('board', x => { fill(x,'#2e4a2e'); speck(x,'#3a5c3a',8,30);
+      x.fillStyle='#5a4632'; x.fillRect(2,2,12,9); x.fillRect(4,11,2,4); x.fillRect(10,11,2,4);
+      x.fillStyle='#3e3022'; x.fillRect(2,2,12,1);
+      x.fillStyle='#e8e0d0'; x.fillRect(4,4,3,4); x.fillRect(9,4,3,5);
+      x.fillStyle='#8a7fa8'; x.fillRect(5,5,1,1); x.fillRect(5,6,1,1); x.fillRect(10,5,1,1); x.fillRect(10,7,1,1); });
+    tile('boxBroken', x => { fill(x,'#4a3a2e'); x.fillStyle='#3e3026'; x.fillRect(0,11,16,1);
+      x.fillStyle='#3a2c20'; x.fillRect(2,5,12,9);
+      x.fillStyle='#2a2014'; x.fillRect(3,6,4,3); x.fillRect(9,9,4,4);
+      x.fillStyle='#5a4632'; x.fillRect(2,5,5,2); x.fillRect(11,5,3,6);
+      x.fillStyle='#1c140c'; x.fillRect(7,4,2,10); });
     // the player's staff, horizontal — rotated for the swing animation
     tile('fx_staff', x => { x.clearRect(0,0,16,16);
       x.fillStyle='#8a5a3a'; x.fillRect(0,7,13,2);
@@ -316,7 +326,7 @@ const SPR = (() => {
     digger: { robe:'#46405a', robe2:'#56506a', skin:'#d8c9b8', hood:true,  trim:'#8a8268' },
     rival:  { robe:'#17131f', robe2:'#241e30', skin:'#cdc4b8', hood:true,  trim:'#e8442e' },
   };
-  function actorCanvas(kind, dir, step){
+  function actorCanvas(kind, dir, step, bare){
     // 64×64, genuinely drawn detail · dir: 0 down 1 up 2 left 3 right
     const o = OUTFITS[kind] || OUTFITS.rival;
     const c = cv(64,64), x = c.getContext('2d');
@@ -367,7 +377,7 @@ const SPR = (() => {
       x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-8, 35 + sw, 12, 2);
       x.fillStyle = o.trim;         x.fillRect(bx+bw+1, 30 + sw, 3, 7); // cuff
       x.fillStyle = o.skin;         x.fillRect(bx+bw+4, 31 + sw, 4, 5); // hand
-      if (kind === 'player'){       // walking staff, upright
+      if (kind === 'player' && !bare){ // walking staff, upright
         const stx = bx + bw + 6;
         x.fillStyle = '#6d4528';    x.fillRect(stx, 10, 4, 48);
         x.fillStyle = '#8a5a3a';    x.fillRect(stx, 10, 2, 48);
@@ -391,7 +401,7 @@ const SPR = (() => {
       x.fillRect(9, 46 + sw, 6, 5); x.fillRect(49, 49 - sw, 6, 5);
       x.fillStyle = sh(o.skin, .8);
       x.fillRect(9, 49 + sw, 6, 2); x.fillRect(49, 52 - sw, 6, 2);
-      if (kind === 'player'){        // staff at the side, upright
+      if (kind === 'player' && !bare){ // staff at the side, upright
         const stx = up ? 6 : 54;
         x.fillStyle = '#6d4528';     x.fillRect(stx, 14, 4, 44);
         x.fillStyle = '#8a5a3a';     x.fillRect(stx, 14, 2, 44);
@@ -451,9 +461,9 @@ const SPR = (() => {
   }
 
   const actorCache = {};
-  function actor(kind, dir, step){
-    const k = `${kind}_${dir}_${step?1:0}`;
-    if (!actorCache[k]) actorCache[k] = actorCanvas(kind, dir, step);
+  function actor(kind, dir, step, bare){
+    const k = `${kind}_${dir}_${step?1:0}_${bare?1:0}`;
+    if (!actorCache[k]) actorCache[k] = actorCanvas(kind, dir, step, bare);
     return actorCache[k];
   }
 

@@ -13,9 +13,9 @@ const TILE_SPR = {
   's':'soil','B':'bwall','r':'roof','D':'door','F':'floor','W':'iwall','R':'rubble',
   'u':'stairsU','d':'stairsD','C':'chest','b':'bed','k':'cauldron','x':'box','A':'altar',
   'i':'sign','l':'flower','m':'dirt','h':'hole','a':'arena','E':'cfloor','X':'cwall',
-  'Y':'ntree','O':'nrock','Q':'nore_ironore','V':'nwisp',
+  'Y':'ntree','O':'nrock','Q':'nore_ironore','V':'nwisp','N':'board',
 };
-const SOLID = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s','Y','O','Q','V']);
+const SOLID = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s','Y','O','Q','V','N']);
 // chars drawn as overlays on the zone's ground tile
 const OVERLAY = new Set(['#','Y','O','Q','V']);
 
@@ -30,7 +30,7 @@ const TOWN_ROWS = [
 '#ggghigggggggggggpggggggfgggggggfgg#',
 '#ggGgGgGgGgggggggpggggggffffgffffgg#',
 '#ggggggggggggggggpggggggglgggglggg##',
-'#ggggggggggggggggpgggggggggggggggg##',
+'#ggggggggggggggggpgggNgggggggggggg##',
 '#gglggggglgggggggpgggggggggggggggg##',
 '#ggggggrrrrrrggggpgggrrrrrrrgggggg##',
 '#ggggggrrrrrrggggpgggrrrrrrrgggggg##',
@@ -258,6 +258,7 @@ const World = (() => {
   }
 
   function enter(map, x, y){
+    if (G.stats){ G.stats.zones = G.stats.zones || {}; if (ZONES[map]) G.stats.zones[map] = true; }
     if (map === 'cata' && !W.cata) W.cata = genCata(W.cataFloor);
     W.map = map;
     W.zoneGates = null;
@@ -371,7 +372,7 @@ const World = (() => {
     if (npcAt(fx, fy)) return true;
     const pid = plotAt(fx, fy);
     if (pid) return true;
-    return 'wsbkxRCihAYOQV'.includes(tileAt(fx, fy)) ||
+    return 'wsbkxRCihAYOQVN'.includes(tileAt(fx, fy)) ||
       ((W.map === 'manor' || W.map === 'house') && furnitureList().some(f => f.x === fx && f.y === fy));
   }
   async function interact(){
@@ -392,6 +393,7 @@ const World = (() => {
       case 'h': return Systems.enterCata();
       case 'A': return Systems.altar();
       case 'Y': case 'O': case 'Q': case 'V': return Systems.gather(t, fx, fy);
+      case 'N': return Systems.questBoard();
       case 'i': {
         const Z = ZONES[W.map];
         if (Z) return UI.say([`A warning is carved here: "${Z.n.toUpperCase()} — beasts of level ${Z.lvl[0]} to ${Z.lvl[1]}."`,
@@ -469,6 +471,7 @@ const World = (() => {
       if (W.map !== 'cata' && G.flags.chests[`${W.map}:${x},${y}`]) return SPR.get('chestO');
       if (W.map === 'cata' && W.cata.opened?.[`${x},${y}`]) return SPR.get('chestO');
     }
+    if (t === 'x' && W.map === 'manor' && !G.manor.storageBuilt) return SPR.get('boxBroken');
     const Z = ZONES[W.map];
     if (Z && t === 'g' && Z.ground) return SPR.get(Z.ground);
     if (Z && t === 'Q') return SPR.get('nore_' + (Z.oreTier || 'ironore'));
@@ -552,7 +555,7 @@ const World = (() => {
     const bobY = moving ? Math.sin(nowT/130) * 1.6 : Math.sin(nowT/600) * 1.0;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(px, py + 16, 15, 5, 0, 0, 7); ctx.fill();
-    ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0),
+    ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0, G.pc && G.pc.swing > 0),
       Math.round(px - 32), Math.round(py - 44 + bobY), 64, 64);
     if (G.pc && G.pc.swing > 0){
       // staff sweeps through the strike arc

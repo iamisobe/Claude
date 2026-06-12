@@ -226,6 +226,22 @@ vm.runInContext(`(${function tests(check){
   }
   check('arena map uniform', ARENA_ROWS.every(r => r.length === ARENA_ROWS[0].length));
 
+  // ---- quests: rewards exist, checks run against a fresh game shape ----
+  {
+    const mockG = { stats:{}, dex:{}, cata:{}, arena:{rank:1,wins:0}, manor:{restored:{}},
+      houses:{}, flags:{}, kills:0, quest:{} };
+    QUESTS.forEach((q, i) => {
+      check(`quest ${i} (${q.n}): reward items exist`,
+        Object.keys(q.reward.items || {}).every(k => ITEMS[k]));
+      const v = q.cur(mockG);
+      check(`quest ${i} (${q.n}): check runs on fresh game`, typeof v === 'number' && v >= 0, String(v));
+      check(`quest ${i} (${q.n}): req positive`, q.req > 0);
+    });
+    const b = bountyQuest(3);
+    check('bounty quest valid', b.req > 0 && typeof b.cur(mockG) === 'number'
+      && Object.keys(b.reward.items).every(k => ITEMS[k]));
+  }
+
   // ---- mechanics math ----
   for (const k of Object.keys(DEX)){
     const g5 = makeGrim(k, 5), g40 = makeGrim(k, 40);

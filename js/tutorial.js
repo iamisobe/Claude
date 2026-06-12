@@ -37,6 +37,17 @@ const Tutorial = (() => {
         'Every skill climbs FOREVER — Necromancy, Fishing, Farming, Brewing, Delving. Open the menu and look around.'],
       check: () => !!G.tut.menuOpened },
 
+    { icon:'🪓', obj:`Chop a gnarled tree in Murkwood: face it and use ${K.a} (3 hits). Get 2 planks.`,
+      intro:['A necromancer builds as much as binds. See the GNARLED TREES with golden fruit? They drop PLANKS.',
+        `Face one and strike it with ${K.a} — three good hits fells it. Gather TWO planks. Stone heaps and ore veins work the same way.`],
+      check: () => (G.stats.planks || 0) >= 2 || G.manor.storageBuilt },
+
+    { icon:'📦', obj:'Repair the SPLINTERED storage chest in your manor hall (2 planks).',
+      intro:['Your first craft! In your manor hall stands a chest too broken to hold anything.',
+        `Carry your planks home, face the splintered chest beside the bed, and use ${K.a} to repair it.`,
+        'A working chest stores the grims your pack cannot carry — you will need it, binder of many.'],
+      check: () => !!G.manor.storageBuilt },
+
     { icon:'🎣', obj:`Find Fisher Eli by the town lake (east side) and talk to him (${K.a}).`,
       intro:['Time you learned to fish. Head back NORTH to town.',
         `Fisher Eli idles by the lake on the east side. Talk to him — face him and use ${K.a}. He owes me a favour.`],

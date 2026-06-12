@@ -734,6 +734,62 @@ const SKILL_REQ = {
   brew:  { tonic:1, glowbait:3, bigtonic:5, voidbait:8, fulltonic:11, revive:15 },          // brewing
 };
 
+
+// ---------- THE LEDGER: a 22-step progression chain + endless bounty ----------
+// cur(G) -> current count · req -> target · reward claimed at the notice board
+const QUESTS = [
+  { n:'Wood for the Hearth', d:'Gather 3 planks from gnarled trees.', req:3,
+    cur:G=>G.stats.planks||0, reward:{gold:150, items:{jar:2}} },
+  { n:'A Second Friend', d:'Have 2 grims bound to your service.', req:2,
+    cur:G=>Object.values(G.dex).filter(v=>v===2).length, reward:{gold:200, items:{tonic:3}} },
+  { n:'The Lake Provides', d:'Land 1 fish with the rod.', req:1,
+    cur:G=>G.stats.fish||0, reward:{gold:300, items:{glowbait:3}} },
+  { n:'Green Thumb', d:'Harvest 1 crop from your farm.', req:1,
+    cur:G=>G.stats.crops||0, reward:{gold:200, items:{seed_grave:2, seed_blood:2}} },
+  { n:'Into the Dark', d:'Reach catacombs floor B3.', req:3,
+    cur:G=>G.cata.maxFloor||0, reward:{gold:400, items:{gjar:2}} },
+  { n:'Marsh Crossing', d:'Set foot in Gravefen.', req:1,
+    cur:G=>(G.stats.zones&&G.stats.zones.fen)?1:0, reward:{gold:500, items:{bigtonic:2}} },
+  { n:'First Steel', d:'Forge a piece of gear from ore.', req:1,
+    cur:G=>G.stats.forged||0, reward:{gold:600, items:{worm:5}} },
+  { n:'Ladder Novice', d:'Win 2 Soul Ladder duels.', req:2,
+    cur:G=>G.arena.wins||0, reward:{gold:800, items:{tonic:3}} },
+  { n:'Highland Prospector', d:'Mine 3 iron ore in Hollow Hills.', req:3,
+    cur:G=>G.stats.ironore||0, reward:{gold:800, items:{stone:5}} },
+  { n:'Restorer', d:'Restore 2 wings of Hollow Manor.', req:2,
+    cur:G=>Object.values(G.manor.restored).filter(Boolean).length, reward:{gold:1000, items:{ecto:3}} },
+  { n:'Guardian Slayer', d:'Defeat or bind a catacomb guardian (B5).', req:5,
+    cur:G=>G.cata.maxFloor||0, reward:{gold:1200, items:{ajar:1}} },
+  { n:'The Dark Forest', d:'Set foot in Mirkfall.', req:1,
+    cur:G=>(G.stats.zones&&G.stats.zones.mirk)?1:0, reward:{gold:1500, items:{fulltonic:2}} },
+  { n:'Pack Leader', d:'Have 6 grims bound in total.', req:6,
+    cur:G=>Object.values(G.dex).filter(v=>v===2).length, reward:{gold:1500, items:{seed_mystery:1}} },
+  { n:'Landed Gentry', d:'Buy any plot from the Deed Book.', req:1,
+    cur:G=>Object.keys(G.houses).length, reward:{gold:2000, items:{plank:6, stone:6}} },
+  { n:'Brewmaster', d:'Brew 5 potions at the cauldron.', req:5,
+    cur:G=>G.stats.brews||0, reward:{gold:2000, items:{moonwheat:4}} },
+  { n:'Ashwalker', d:'Set foot in Ashreach.', req:1,
+    cur:G=>(G.stats.zones&&G.stats.zones.ash)?1:0, reward:{gold:3000, items:{revive:1}} },
+  { n:'Silver Tongue', d:'Mine 3 silver ore.', req:3,
+    cur:G=>G.stats.silverore||0, reward:{gold:3500, items:{voidbait:3}} },
+  { n:'Ladder Climber', d:'Reach Soul Ladder rank 6.', req:6,
+    cur:G=>G.arena.rank||1, reward:{gold:3500, items:{ajar:2}} },
+  { n:'The Long Stair', d:'Reach catacombs floor B15.', req:15,
+    cur:G=>G.cata.maxFloor||0, reward:{gold:4000, items:{ajar:3}} },
+  { n:'Winter Pilgrim', d:'Set foot in Frostmere.', req:1,
+    cur:G=>(G.stats.zones&&G.stats.zones.frost)?1:0, reward:{gold:5000, items:{seed_mystery:2}} },
+  { n:'Moon Miner', d:'Mine 1 moonore at the Pale Summit.', req:1,
+    cur:G=>G.stats.moonore||0, reward:{gold:6000, items:{fulltonic:3}} },
+  { n:'Crown of Dust', d:'Bind or fell the Hollow King.', req:1,
+    cur:G=>(G.dex.hollowking===2||G.flags.kingFallen)?1:0, reward:{gold:15000, items:{ajar:5, seed_mystery:3}} },
+];
+// past the chain: an endless, escalating bounty
+function bountyQuest(n){
+  return { n:`Endless Bounty ${n}`, d:'Slay 30 more grims anywhere.', req:30,
+    cur:G=>Math.max(0,(G.kills||0)-(G.quest.bountyBase||0)),
+    reward:{gold:1000 + n*400, items:{ajar:1}}, bounty:true };
+}
+
 // XP curve helpers
 function xpForLevel(l){ return l*l*l; }
 function statsFor(spKey, lvl){

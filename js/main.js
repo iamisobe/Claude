@@ -15,10 +15,11 @@ function freshGame(){
     gear: { equip: Object.fromEntries(EQUIP_KEYS.map(k => [k, null])), bag: [] },
     houses: {},
     dex: {}, skills: {}, farm: {},
-    manor: { restored: {}, furniture: [] },
+    manor: { restored: {}, furniture: [], storageBuilt: false },
     arena: { rank: 1, wins: 0 },
     cata: { maxFloor: 0 },
     flags: { chests: {} },
+    stats: {}, quest: { i: 0 },
     pos: { map: 'town', x: 17, y: 8 },
   };
 }
@@ -73,6 +74,9 @@ function continueGame(){
   G.gear = G.gear || { equip: {}, bag: [] };
   migrateGear();
   G.houses = G.houses || {};
+  G.stats = G.stats || {};
+  G.quest = G.quest || { i: 0 };
+  if (G.manor.storageBuilt === undefined) G.manor.storageBuilt = true; // veterans keep their chest
   $('title').classList.add('hidden');
   World.enter(G.pos.map, G.pos.x, G.pos.y);
   World.active = true;
