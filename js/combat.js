@@ -34,7 +34,7 @@ const Combat = (() => {
     return {
       k:'e', sp, lvl, boss, x:opts.x, y:opts.y,
       hp:maxhp, maxhp,
-      dmg:(3 + 1.7*lvl) * a.dmg * (boss ? 1.6 : 1),
+      dmg:(3 + 1.4*lvl) * a.dmg * (boss ? 1.6 : 1),
       spd:a.spd * (boss ? 0.8 : 1), arch:ARCH[sp],
       cd:1 + Math.random(), t:0, wx:opts.x, wy:opts.y, sx:opts.x, sy:opts.y,
       aggro:!!opts.aggro, hooked:!!opts.hooked, riv:opts.riv || null,
@@ -56,7 +56,7 @@ const Combat = (() => {
 
   function zoneLevel(zone){
     const nl = Systems.skillLvl('necromancy');
-    if (zone === 'cata') return 3 + World.cataFloor * 2;
+    if (zone === 'cata') return 1 + World.cataFloor * 2;
     return 2 + Math.floor((nl - 1) * 0.7);
   }
 
@@ -73,10 +73,11 @@ const Combat = (() => {
       }
     } else if (zone === 'cata'){
       const lvl = zoneLevel('cata');
-      for (let i = 0; i < 11 + Math.min(10, Math.floor(World.cataFloor/3)); i++){
-        const s = freeSpot(4); if (!s) continue;
+      // sparser floors that thicken with depth; nothing spawns near the stairs
+      for (let i = 0; i < 7 + Math.min(12, World.cataFloor); i++){
+        const s = freeSpot(7); if (!s) continue;
         const e = pickW(ENCOUNTERS.cata);
-        spawnEnemy(e.sp, Math.max(2, lvl - 1 + rnd(4)), s);
+        spawnEnemy(e.sp, Math.max(2, lvl - 2 + rnd(4)), s);
       }
       if (World.cata.boss && !World.cata.bossDown){
         const [bx, by] = World.cata.boss;
@@ -153,7 +154,7 @@ const Combat = (() => {
   function hurtPlayer(dmg){
     if (G.pc.inv > 0 || dying) return;
     G.pc.hp -= Math.max(1, Math.round(dmg));
-    G.pc.inv = 0.5;
+    G.pc.inv = 0.7;
     floater(World.ppx, World.ppy - 28, String(Math.max(1, Math.round(dmg))), '#e85d5d');
     if (G.pc.hp <= 0){ dying = true; G.pc.hp = 0; Systems.afterLoss().then(() => dying = false); }
   }
@@ -323,7 +324,9 @@ const Combat = (() => {
     G.pc.swing = Math.max(0, (G.pc.swing || 0) - dt);
     G.pc.soul = Math.min(ps.maxsoul, G.pc.soul + ps.regen * dt);
 
-    const anyAggro = enemies().some(e => e.aggro);
+    // regen when no pursuer is close — escaping danger lets you breathe
+    const anyAggro = enemies().some(e => e.aggro &&
+      Math.hypot(e.x - World.ppx, e.y - World.ppy) < 450);
     if (!anyAggro){
       G.pc.hp = Math.min(ps.maxhp, G.pc.hp + ps.maxhp * 0.04 * dt);
       for (const m of minions){
@@ -367,13 +370,20 @@ const Combat = (() => {
       if (d < td){ td = d; tgt = t; }
     }
     if (!e.aggro){
-      if (td < (e.hooked ? 9999 : 240)) e.aggro = true;
+      // the catacombs are dark: enemies notice you later there
+      const aggroR = World.map === 'cata' ? 185 : 240;
+      if (td < aggroR) e.aggro = true;
       else { // wander
         if (e.t <= 0){ e.t = 2 + Math.random()*2.5; e.wx = e.sx + rnd(120)-60; e.wy = e.sy + rnd(120)-60; }
         const d = Math.hypot(e.wx-e.x, e.wy-e.y);
         if (d > 8) moveEnt(e, (e.wx-e.x)/d * e.spd*0.4, (e.wy-e.y)/d * e.spd*0.4, dt);
         return;
       }
+    } else if (td > 480 && !e.boss && !e.riv){
+      // leash: lose interest when you escape far enough, head home
+      e.aggro = false;
+      e.wx = e.sx; e.wy = e.sy;
+      return;
     }
     if (!tgt) return;
     const spd = e.spd * (e.rage ? 1.5 : 1);
