@@ -216,3 +216,17 @@ body.touch-on #keys-hint { display:none; }
 .tnode.sel { outline:2px solid var(--accent); }
 .tnode.lk { opacity:.4; }
 .tnode .pips { color:var(--gold); letter-spacing:1px; font-size:10px; white-space:nowrap; }
+
+/* Skill hotbar */
+#hotbar { position:fixed; left:50%; bottom:10px; transform:translateX(-50%);
+  display:flex; gap:6px; z-index:74; }
+.hslot { position:relative; width:48px; height:48px; padding:0;
+  background:rgba(23,19,31,.85); border:2px solid var(--border); border-radius:8px;
+  overflow:hidden; -webkit-tap-highlight-color:transparent; touch-action:none; }
+.hslot .hicon { font-size:22px; line-height:44px; color:var(--accent); }
+.hslot .hkey { position:absolute; top:1px; left:4px; font-size:9px; color:#8a7fa8; }
+.hslot .hcd { position:absolute; left:0; right:0; bottom:0; height:0;
+  background:rgba(11,8,18,.78); pointer-events:none; }
+.hslot.ready { border-color:var(--accent); }
+.hslot.nosoul .hicon { color:#5a4f70; }
+body.modal-open #hotbar { display:none; }

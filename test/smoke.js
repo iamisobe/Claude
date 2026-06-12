@@ -255,6 +255,12 @@ vm.runInContext(`(${function tests(check){
     }
   }
 
+  // ---- active skills ----
+  for (const [id, A] of Object.entries(ACTIVES)){
+    check(`active ${id}: tree node exists`, Object.values(TREE).some(B => B.nodes.some(nd => nd.id === id && nd.active)));
+    check(`active ${id}: sane`, A.cd > 0 && A.soul > 0 && typeof A.d(1) === 'string' && !!A.icon);
+  }
+
   // ---- mechanics math ----
   for (const k of Object.keys(DEX)){
     const g5 = makeGrim(k, 5), g40 = makeGrim(k, 40);

@@ -736,6 +736,28 @@ const SKILL_REQ = {
 
 
 
+
+// ---------- ACTIVE SKILLS (cast from the 5-slot hotbar) ----------
+// learned as talent-tree nodes; ranks improve them. cd seconds, soul cost.
+const ACTIVES = {
+  barrage: { n:'Soul Barrage',     icon:'☄', cd:6,  soul:12,
+    d:r=>`Fan of ${4+r} bolts, each ${60+10*r}% bolt damage` },
+  coil:    { n:'Death Coil',       icon:'➢', cd:10, soul:12,
+    d:r=>`Heavy bolt for ${150+50*r}% damage; half the harm heals you` },
+  grasp:   { n:'Grave Grasp',      icon:'⌖', cd:12, soul:14,
+    d:r=>`Bones erupt around the nearest foe: ${80+20*r}% damage, roots ${(1.5+0.5*r).toFixed(1)}s` },
+  bones:   { n:'Raise Bones',      icon:'☠', cd:25, soul:15,
+    d:r=>`Raise ${1+r} bone servant${r?'s':''} for 15s` },
+  frenzy:  { n:'Command: Frenzy',  icon:'⚑', cd:20, soul:10,
+    d:r=>`Pack deals +${30+10*r}% damage for ${5+r}s` },
+  armor:   { n:'Bone Armor',       icon:'⛨', cd:18, soul:12,
+    d:r=>`Shield absorbing ${25+10*r}% of your max life, 8s` },
+  whirl:   { n:'Whirling Scythe',  icon:'↻', cd:8,  soul:8,
+    d:r=>`Spin: ${120+30*r}% melee damage to everything around you` },
+  vigor:   { n:'Unholy Vigor',     icon:'≫', cd:20, soul:8,
+    d:r=>`+30% speed and doubled regeneration for ${5+r}s` },
+};
+
 // ---------- NECROMANCER TALENT TREE ----------
 // 1 point per Necromancy level. Tier 1 nodes need 3 points spent in the
 // branch, capstones need 7. Respec at the tree for gold.
@@ -743,26 +765,34 @@ const TREE = {
   dominion: { n:'Dominion', col:'#6dd86d', icon:'☠',
     blurb:'Rule a greater, deadlier pack.', nodes:[
     { id:'packcap', n:'Pack Tactician',  max:2, tier:0, d:r=>`+${r} pack size` },
+    { id:'bones',   n:'Raise Bones',     max:3, tier:0, active:true, d:r=>ACTIVES.bones.d(r) },
     { id:'minD',    n:'Dark Vigor',      max:5, tier:0, d:r=>`Minions deal +${10*r}% damage` },
     { id:'minS',    n:'Swift Service',   max:3, tier:1, d:r=>`Minions attack ${8*r}% faster` },
     { id:'minT',    n:'Grave Ward',      max:3, tier:1, d:r=>`Minions take ${7*r}% less damage` },
     { id:'harvest', n:'Soul Harvest',    max:3, tier:1, d:r=>`Every kill restores ${2*r} of your life` },
+    { id:'frenzy',  n:'Command: Frenzy', max:3, tier:1, active:true, d:r=>ACTIVES.frenzy.d(r) },
     { id:'legion',  n:'Risen Legion',    max:1, tier:2, d:()=>'Downed grims rise twice as fast, at half health' },
   ]},
   hexcraft: { n:'Hexcraft', col:'#9b6dff', icon:'✦',
     blurb:'Sharper, stranger hexes.', nodes:[
     { id:'boltD',   n:'Soul Lance',      max:5, tier:0, d:r=>`Hex bolts deal +${12*r}% damage` },
     { id:'soulMax', n:'Deep Well',       max:3, tier:0, d:r=>`+${15*r} max Soul` },
+    { id:'barrage', n:'Soul Barrage',    max:3, tier:0, active:true, d:r=>ACTIVES.barrage.d(r) },
     { id:'boltC',   n:'Frugal Magic',    max:3, tier:1, d:r=>`Bolts cost ${r} less Soul` },
     { id:'echo',    n:'Echoing Hex',     max:3, tier:1, d:r=>`${15*r}% chance a bolt echoes at another foe` },
+    { id:'coil',    n:'Death Coil',      max:3, tier:1, active:true, d:r=>ACTIVES.coil.d(r) },
+    { id:'grasp',   n:'Grave Grasp',     max:3, tier:1, active:true, d:r=>ACTIVES.grasp.d(r) },
     { id:'nova',    n:'Hex Nova',        max:1, tier:2, d:()=>'Bolts burst on impact, splashing 60% damage nearby' },
   ]},
   knight: { n:'Grave Knight', col:'#e8c95d', icon:'⚔',
     blurb:'Stand in the slaughter and endure.', nodes:[
     { id:'melD',    n:'Heavy Arm',       max:5, tier:0, d:r=>`Staff strikes deal +${12*r}% damage` },
     { id:'hpMax',   n:'Corpse Skin',     max:3, tier:0, d:r=>`+${20*r} max Life` },
+    { id:'whirl',   n:'Whirling Scythe', max:3, tier:0, active:true, d:r=>ACTIVES.whirl.d(r) },
     { id:'sweep',   n:'Wide Sweep',      max:2, tier:1, d:r=>`Swing reach +${20*r}%` },
     { id:'wind',    n:'Second Wind',     max:3, tier:1, d:r=>`Regeneration +${20*r}%` },
+    { id:'armor',   n:'Bone Armor',      max:3, tier:1, active:true, d:r=>ACTIVES.armor.d(r) },
+    { id:'vigor',   n:'Unholy Vigor',    max:3, tier:1, active:true, d:r=>ACTIVES.vigor.d(r) },
     { id:'reaper',  n:"Reaper's Momentum", max:1, tier:2, d:()=>'Kills grant +30% speed and damage for 4s' },
   ]},
 };

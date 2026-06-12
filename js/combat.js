@@ -19,8 +19,8 @@ const Combat = (() => {
       maxsoul: Math.floor(25 + nl*2 + gearAffix('soul') + 15*treeRank('soulMax')),
       melee:   (7 + nl*1.6) * (1 + gearAffix('dmg')/100) * (1 + 0.12*treeRank('melD')) * fr,
       bolt:    (10 + nl*2.2) * (1 + gearAffix('bolt')/100) * (1 + 0.12*treeRank('boltD')),
-      speed:   165 * (1 + gearAffix('speed')/100) * (fr > 1 ? 1.25 : 1),
-      regen:   (2.2 + nl*0.08) * (1 + gearAffix('regen')/100) * (1 + 0.2*treeRank('wind')),
+      speed:   165 * (1 + gearAffix('speed')/100) * (fr > 1 ? 1.25 : 1) * (G.pc && G.pc.vigor > 0 ? 1.3 : 1),
+      regen:   (2.2 + nl*0.08) * (1 + gearAffix('regen')/100) * (1 + 0.2*treeRank('wind')) * (G.pc && G.pc.vigor > 0 ? 2 : 1),
     };
   }
   function minionCap(){ return Math.min(11, 3 + Math.floor(Systems.skillLvl('necromancy') / 5) + treeRank('packcap')); }
@@ -108,7 +108,8 @@ const Combat = (() => {
   function minionDmg(g){
     const st = statsFor(g.sp, g.lvl);
     const base = (Math.max(st.atk, st.spc) * 0.45 + g.lvl * 0.9);
-    return base * (1 + gearAffix('minion')/100) * (1 + 0.10*treeRank('minD'));
+    return base * (1 + gearAffix('minion')/100) * (1 + 0.10*treeRank('minD'))
+      * (G.pc.packFrenzy > 0 ? 1 + G.pc.packFrenzyAmt : 1);
   }
 
   // ---------- helpers ----------
@@ -170,9 +171,18 @@ const Combat = (() => {
     if (srcXY){ const d = Math.hypot(e.x-srcXY.x, e.y-srcXY.y) || 1;
       moveEnt(e, (e.x-srcXY.x)/d * 1400, (e.y-srcXY.y)/d * 1400, 0.016); }
     if (e.hp <= 0) killEnemy(e);
+    return final;
   }
   function hurtPlayer(dmg){
     if (G.pc.inv > 0 || dying) return;
+    // Bone Armor absorbs first
+    if (G.pc.shield > 0){
+      const ab = Math.min(G.pc.shield, dmg);
+      G.pc.shield -= ab;
+      dmg -= ab;
+      floater(World.ppx, World.ppy - 28, `(${Math.round(ab)})`, '#8ad8e8');
+      if (dmg <= 0){ G.pc.inv = 0.4; return; }
+    }
     G.pc.hp -= Math.max(1, Math.round(dmg));
     G.pc.inv = 0.7;
     floater(World.ppx, World.ppy - 28, String(Math.max(1, Math.round(dmg))), '#e85d5d');
@@ -183,6 +193,11 @@ const Combat = (() => {
     m.g.hp -= Math.max(1, Math.round(dmg));
     floater(m.x, m.y - 24, String(Math.max(1, Math.round(dmg))), '#e8825d');
     if (m.g.hp <= 0){
+      if (m.g.temp){
+        poof(m.x, m.y, '#d8d0b8');
+        minions = minions.filter(x => x !== m);
+        return;
+      }
       m.g.hp = 0; m.g.downT = treeRank('legion') ? 7.5 : 15;
       poof(m.x, m.y, '#9b6dff');
       UI.toast(`${m.g.nick} was knocked down!`);
@@ -357,6 +372,19 @@ const Combat = (() => {
     G.pc.swing = Math.max(0, (G.pc.swing || 0) - dt);
     G.pc.cast = Math.max(0, (G.pc.cast || 0) - dt);
     G.pc.frenzy = Math.max(0, (G.pc.frenzy || 0) - dt);
+    G.pc.packFrenzy = Math.max(0, (G.pc.packFrenzy || 0) - dt);
+    G.pc.vigor = Math.max(0, (G.pc.vigor || 0) - dt);
+    G.pc.shieldT = Math.max(0, (G.pc.shieldT || 0) - dt);
+    if (G.pc.shieldT <= 0) G.pc.shield = 0;
+    G.pc.cds = G.pc.cds || {};
+    for (const k of Object.keys(G.pc.cds)) G.pc.cds[k] = Math.max(0, G.pc.cds[k] - dt);
+    // temporary bone servants expire
+    for (const m of minions.slice()){
+      if (m.g && m.g.temp){
+        m.g.ttl -= dt;
+        if (m.g.ttl <= 0){ poof(m.x, m.y, '#d8d0b8'); minions = minions.filter(x => x !== m); }
+      }
+    }
     G.pc.soul = Math.min(ps.maxsoul, G.pc.soul + ps.regen * dt);
 
     // regen when no pursuer is close — escaping danger lets you breathe
@@ -398,6 +426,7 @@ const Combat = (() => {
     e.cd -= dt;
     e.t -= dt;
     if (e.rage) e.rage = Math.max(0, e.rage - dt);
+    if (e.rooted > 0){ e.rooted -= dt; e.cd -= dt * 0; /* held fast */ }
     // target
     let tgt = null, td = 1e9;
     for (const t of targets){
@@ -421,7 +450,7 @@ const Combat = (() => {
       return;
     }
     if (!tgt) return;
-    const spd = e.spd * (e.rage ? 1.5 : 1);
+    const spd = e.rooted > 0 ? 0 : e.spd * (e.rage ? 1.5 : 1);
     const dx = (tgt.x - e.x)/ (td||1), dy = (tgt.y - e.y)/(td||1);
     const hitR = e.boss ? 50 : 34;
     const hit = () => { if (tgt.kind === 'player') hurtPlayer(e.dmg); else hurtMinion(tgt.m, e.dmg); };
@@ -503,7 +532,11 @@ const Combat = (() => {
     if (p.ally){
       const e = nearestEnemy(p.x, p.y, 22);
       if (e){
-        hurtEnemy(e, p.dmg, 'SPIRIT');
+        const dealt = hurtEnemy(e, p.dmg, 'SPIRIT');
+        if (p.heal && dealt){
+          G.pc.hp = Math.min(pstats().maxhp, G.pc.hp + dealt * p.heal);
+          floater(World.ppx, World.ppy - 30, '+' + Math.round(dealt * p.heal), '#6dd86d');
+        }
         if (treeRank('nova')){ // burst: splash nearby foes
           poof(p.x, p.y, '#9b6dff');
           for (const e2 of enemies()){
@@ -618,6 +651,88 @@ const Combat = (() => {
     }
   }
 
+  // ---------- active skills (hotbar) ----------
+  function castSkill(id){
+    if (!id) return;
+    const r = treeRank(id);
+    if (!r) return UI.toast('Skill not learned — see your Talents.');
+    const A = ACTIVES[id];
+    G.pc.cds = G.pc.cds || {};
+    if ((G.pc.cds[id] || 0) > 0) return;
+    if (G.pc.soul < A.soul) return UI.toast('Not enough Soul.');
+    const ps = pstats();
+    G.pc.soul -= A.soul;
+    G.pc.cds[id] = A.cd;
+    G.pc.cast = 0.18;
+    const [fx, fy] = World.faceVec();
+    const tgt = nearestEnemy(World.ppx, World.ppy, 430);
+    const tx = tgt ? tgt.x : World.ppx + fx*200, ty = tgt ? tgt.y : World.ppy + fy*200;
+    switch (id){
+      case 'barrage': {
+        const n = 4 + r, base = Math.atan2(ty - World.ppy, tx - World.ppx);
+        for (let i = 0; i < n; i++){
+          const a = base + (i - (n-1)/2) * 0.22;
+          shoot(World.ppx, World.ppy - 8, World.ppx + Math.cos(a)*100, World.ppy - 8 + Math.sin(a)*100,
+            ps.bolt * (0.6 + 0.1*r), true, '#9b6dff', 290);
+        }
+        break;
+      }
+      case 'coil': {
+        const p = { k:'p', x:World.ppx, y:World.ppy - 8, dmg: ps.bolt * (1.5 + 0.5*r),
+          ally:true, col:'#6dd86d', ttl:1.8, heal:0.5 };
+        const d = Math.hypot(tx - p.x, ty - p.y) || 1;
+        p.vx = (tx - p.x)/d * 260; p.vy = (ty - p.y)/d * 260;
+        ents.push(p);
+        break;
+      }
+      case 'grasp': {
+        if (!tgt){ UI.toast('No foe in reach.'); G.pc.soul += A.soul; G.pc.cds[id] = 0; return; }
+        poof(tgt.x, tgt.y, '#d8d0b8');
+        for (const e of enemies()){
+          if (Math.hypot(e.x - tgt.x, e.y - tgt.y) < 85){
+            hurtEnemy(e, ps.bolt * (0.8 + 0.2*r), 'BONE');
+            e.rooted = 1.5 + 0.5*r;
+            floater(e.x, e.y - 34, 'ROOTED', '#d8d0b8');
+          }
+        }
+        break;
+      }
+      case 'bones': {
+        const nl = Systems.skillLvl('necromancy');
+        for (let i = 0; i <= r; i++){
+          const lvl = Math.max(3, Math.round(nl * 1.2));
+          const st = statsFor('skulpup', lvl);
+          minions.push({ k:'m', slot: 90 + i, cd: Math.random(),
+            x: World.ppx + Math.cos(i*2)*50, y: World.ppy + Math.sin(i*2)*50,
+            g: { sp:'skulpup', lvl, hp: st.maxhp, nick:'Bone Servant', xp:0, temp:true, ttl:15 } });
+        }
+        UI.toast(`${1 + r} bone servant${r ? 's' : ''} claw out of the earth!`);
+        break;
+      }
+      case 'frenzy':
+        G.pc.packFrenzy = 5 + r;
+        G.pc.packFrenzyAmt = 0.3 + 0.1*r;
+        UI.toast('Your pack howls with borrowed fury!');
+        break;
+      case 'armor':
+        G.pc.shield = Math.round(ps.maxhp * (0.25 + 0.1*r));
+        G.pc.shieldT = 8;
+        break;
+      case 'whirl': {
+        G.pc.swing = 0.24;
+        const reach = (1 + 0.2 * treeRank('sweep')) * 75;
+        for (const e of enemies()){
+          if (Math.hypot(e.x - World.ppx, e.y - World.ppy) < reach + (e.boss ? 20 : 0))
+            hurtEnemy(e, ps.melee * (1.2 + 0.3*r), null, { x:World.ppx, y:World.ppy });
+        }
+        break;
+      }
+      case 'vigor':
+        G.pc.vigor = 5 + r;
+        break;
+    }
+  }
+
   function spawnRivalPack(riv, rank){
     const px = World.ppx, py = World.ppy;
     const lvl = Math.max(3, 4 + Math.floor(rank * 2.0));
@@ -637,7 +752,7 @@ const Combat = (() => {
   function clearHostiles(){ ents = ents.filter(e => e.k !== 'e' && e.k !== 'p'); }
 
   return { reset, update, draw, playerAttack, playerBolt, throwJar, pstats, minionCap,
-    floatText: floater,
+    castSkill, floatText: floater,
     syncMinions, spawnEnemy, spawnRivalPack, clearHostiles, zoneLevel,
     enemies: () => enemies(), nearestEnemy, hasAggro: () => enemies().some(e => e.aggro) };
 })();

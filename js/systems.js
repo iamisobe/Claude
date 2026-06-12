@@ -1059,6 +1059,14 @@ const Systems = (() => {
         if (locked(b, nd)) return UI.toast(`Spend ${TREE_TIER_REQ[nd.tier]} points in ${TREE[b].n} first.`);
         G.tree[nd.id] = r + 1;
         UI.toast(`${nd.n} → rank ${r + 1}`);
+        if (nd.active && r === 0){ // first rank: drop it on the hotbar
+          G.hotbar = G.hotbar || [null,null,null,null,null];
+          const free = G.hotbar.indexOf(null);
+          if (free >= 0 && !G.hotbar.includes(nd.id)){
+            G.hotbar[free] = nd.id;
+            UI.toast(`${nd.n} assigned to hotbar slot ${free + 1}.`);
+          }
+        }
         G.pc.hp = Math.min(G.pc.hp, Combat.pstats().maxhp);
         save();
         render();
@@ -1071,6 +1079,7 @@ const Systems = (() => {
         if (!(await UI.confirm(`Unlearn all ${spent} points for ${cost}⛁?`))) return;
         G.gold -= cost;
         G.tree = {};
+        G.hotbar = [null,null,null,null,null];
         save();
         render();
       }
@@ -1104,7 +1113,9 @@ const Systems = (() => {
           <span class="tag">rank ${r}/${nd.max}${nd.tier ? ` · needs ${TREE_TIER_REQ[nd.tier]} pts in ${TREE[b].n}` : ''}</span><br>
           ${r > 0 ? `<span class="aff">Now: ${nd.d(r)}</span><br>` : ''}
           ${r < nd.max ? `<span class="dim">Next: ${nd.d(r + 1)}</span>` : '<span class="dim">Mastered.</span>'}
-          <div class="gd-btns">${r < nd.max && !lk ? '<button data-act="learn">LEARN (1 pt)</button>' : ''}</div>`;
+          ${nd.active ? `<span class="tag" style="color:#8ad8e8">ACTIVE · ${ACTIVES[nd.id].soul} soul · ${ACTIVES[nd.id].cd}s cd</span>` : ''}
+          <div class="gd-btns">${r < nd.max && !lk ? '<button data-act="learn">LEARN (1 pt)</button>' : ''}
+            ${nd.active && r > 0 ? '<button data-act="assign">ASSIGN SLOT</button>' : ''}</div>`;
         for (const el of p.querySelectorAll('.tnode')){
           const pick = () => { selB = +el.dataset.b; selN = +el.dataset.n; render(); };
           el.addEventListener('mouseenter', () => { if (selB !== +el.dataset.b || selN !== +el.dataset.n) pick(); });
@@ -1112,6 +1123,20 @@ const Systems = (() => {
         }
         const lb = p.querySelector('[data-act="learn"]');
         if (lb) lb.onclick = learn;
+        const ab = p.querySelector('[data-act="assign"]');
+        if (ab) ab.onclick = async () => {
+          const nd = node();
+          const c = await UI.choice(['Slot 1','Slot 2','Slot 3','Slot 4','Slot 5','Cancel']);
+          if (c >= 0 && c < 5){
+            G.hotbar = G.hotbar || [null,null,null,null,null];
+            const old = G.hotbar.indexOf(nd.id);
+            if (old >= 0) G.hotbar[old] = null;
+            G.hotbar[c] = nd.id;
+            UI.toast(`${nd.n} → slot ${c + 1}`);
+            save();
+          }
+          render();
+        };
         $('tree-respec').onclick = respec;
       }
 

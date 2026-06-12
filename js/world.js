@@ -419,6 +419,8 @@ const World = (() => {
       case 'x': case 'X': case 'k': case 'K': Combat.playerBolt(); break;
       case 'c': case 'C': case 'l': case 'L': Combat.throwJar(); break;
       case 'Escape': case 'Enter': Systems.pauseMenu(); break;
+      case '1': case '2': case '3': case '4': case '5':
+        Combat.castSkill((G.hotbar || [])[+key - 1]); break;
     }
   }
 
@@ -584,6 +586,12 @@ const World = (() => {
     }
     if (G.pc && G.pc.inv > 0.2){ ctx.strokeStyle = '#e8e0d066';
       ctx.beginPath(); ctx.arc(px, py - 6, 26, 0, 7); ctx.stroke(); }
+    if (G.pc && G.pc.shield > 0){ // Bone Armor shell
+      ctx.strokeStyle = `rgba(216,208,184,${0.5 + 0.3*Math.sin(nowT/120)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(px, py - 8, 32, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
 
     // light tint
     let tint = 0;

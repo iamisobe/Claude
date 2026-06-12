@@ -83,6 +83,15 @@ function initTouch(){
   }
 }
 
+function initHotbar(){
+  for (const el of document.querySelectorAll('.hslot')){
+    const fire = ev => { ev.preventDefault();
+      if (G.started && !Input.top()) Combat.castSkill((G.hotbar || [])[+el.dataset.i]); };
+    el.addEventListener('click', fire);
+    el.addEventListener('touchstart', fire, { passive:false });
+  }
+}
+
 // ---------- responsive scaling: fit the 720×528 frame to the screen ----------
 // On touch devices the frame shrinks further to leave real bezels for
 // the controls (sides in landscape, bottom strip helps in portrait),
@@ -197,6 +206,19 @@ const UI = (() => {
     $('soul-fill').style.width = Math.max(0, G.pc.soul / ps.maxsoul * 100) + '%';
     $('soul-txt').textContent = `${Math.floor(G.pc.soul)}/${ps.maxsoul}`;
     $('pack-txt').textContent = `☠ ${G.party.filter(g => g.hp > 0).length}/${G.party.length} pack (cap ${Combat.minionCap()})`;
+    // hotbar
+    $('hotbar').classList.remove('hidden');
+    const slots = document.querySelectorAll('.hslot');
+    (G.hotbar || []).forEach((id, i) => {
+      const el = slots[i];
+      if (!el) return;
+      const A = id && ACTIVES[id];
+      el.querySelector('.hicon').textContent = A ? A.icon : '';
+      const cd = A ? ((G.pc.cds || {})[id] || 0) : 0;
+      el.querySelector('.hcd').style.height = A && cd > 0 ? `${Math.min(100, cd / A.cd * 100)}%` : '0';
+      el.classList.toggle('ready', !!A && cd <= 0 && G.pc.soul >= A.soul);
+      el.classList.toggle('nosoul', !!A && G.pc.soul < A.soul);
+    });
   }
 
   // ----- generic list panel -----

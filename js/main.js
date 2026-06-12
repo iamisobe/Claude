@@ -19,7 +19,7 @@ function freshGame(){
     arena: { rank: 1, wins: 0 },
     cata: { maxFloor: 0 },
     flags: { chests: {} },
-    stats: {}, quest: { i: 0 }, tree: {},
+    stats: {}, quest: { i: 0 }, tree: {}, hotbar: [null,null,null,null,null],
     pos: { map: 'town', x: 17, y: 8 },
   };
 }
@@ -77,6 +77,7 @@ function continueGame(){
   G.stats = G.stats || {};
   G.quest = G.quest || { i: 0 };
   G.tree = G.tree || {};
+  G.hotbar = G.hotbar || [null,null,null,null,null];
   if (G.manor.storageBuilt === undefined) G.manor.storageBuilt = true; // veterans keep their chest
   $('title').classList.add('hidden');
   World.enter(G.pos.map, G.pos.x, G.pos.y);
@@ -88,6 +89,7 @@ function continueGame(){
 // ---------- boot ----------
 SPR.init();
 initTouch();
+initHotbar();
 fitScreen();
 
 $('btn-new').onclick = async () => {
