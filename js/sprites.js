@@ -326,8 +326,10 @@ const SPR = (() => {
     digger: { robe:'#46405a', robe2:'#56506a', skin:'#d8c9b8', hood:true,  trim:'#8a8268' },
     rival:  { robe:'#17131f', robe2:'#241e30', skin:'#cdc4b8', hood:true,  trim:'#e8442e' },
   };
-  function actorCanvas(kind, dir, step, bare){
-    // 64×64, genuinely drawn detail · dir: 0 down 1 up 2 left 3 right
+  function actorCanvas(kind, dir, step, bare, eq){
+    // 64×64 detailed body with VISIBLE EQUIPMENT (paperdoll layers)
+    // eq: {helm,chest,pants,boots,gloves,cape,amulet,w1,w2} -> rarity|null
+    eq = eq || {};
     const o = OUTFITS[kind] || OUTFITS.rival;
     const c = cv(64,64), x = c.getContext('2d');
     const flip = dir === 2;
@@ -344,97 +346,153 @@ const SPR = (() => {
       return `rgb(${r},${g2},${b})`;
     };
     const lite = h2 => sh(h2, 1.3, 14);
+    const MET = '#6a7080', METD = '#4a4f5e', METL = '#9aa1b4';
+    const rc = r => RARITIES[r].col;
 
-    // ================= BODY (rows 27-54) =================
     const bx = side ? 20 : 16, bw = side ? 24 : 32;
-    x.fillStyle = sh(o.robe, .8);  x.fillRect(bx, 27, bw, 27);          // robe base
+
+    // ===== CAPE (behind the body, except seen from behind) =====
+    if (eq.cape != null && !up){
+      const cc = sh(rc(eq.cape), .55), ccd = sh(rc(eq.cape), .35);
+      if (side){ // trails behind (left of body when facing right)
+        x.fillStyle = cc;  x.fillRect(bx-7, 28, 12, 26);
+        x.fillStyle = ccd; x.fillRect(bx-7, 46, 5, 8); x.fillRect(bx-7, 28, 2, 26);
+      } else {
+        x.fillStyle = cc;  x.fillRect(bx-4, 28, bw+8, 27);
+        x.fillStyle = ccd; x.fillRect(bx-4, 50, bw+8, 5);
+      }
+    }
+
+    // ===== BODY =====
+    x.fillStyle = sh(o.robe, .8);  x.fillRect(bx, 27, bw, 27);
     x.fillStyle = o.robe;          x.fillRect(bx+2, 27, bw-4, 25);
-    x.fillStyle = o.robe2;         x.fillRect(bx+5, 29, bw-10, 21);     // front panel
-    x.fillStyle = lite(o.robe2);   x.fillRect(bx+5, 29, 2, 21);         // left-light
-    x.fillStyle = sh(o.robe, .55); // folds + hem shadow
+    x.fillStyle = o.robe2;         x.fillRect(bx+5, 29, bw-10, 21);
+    x.fillStyle = lite(o.robe2);   x.fillRect(bx+5, 29, 2, 21);
+    x.fillStyle = sh(o.robe, .55);
     x.fillRect(bx + (bw>>2), 40, 2, 12);
     x.fillRect(bx + bw - (bw>>2) - 2, 40, 2, 12);
     x.fillRect(bx, 52, bw, 2);
-    x.fillStyle = o.trim;          x.fillRect(bx, 27, bw, 2);           // collar
-    x.fillRect(bx+2, 36, bw-4, 4);                                      // belt
-    x.fillStyle = sh(o.trim, .55); x.fillRect(bx + (bw>>1) - 3, 36, 6, 4); // buckle
-    x.fillStyle = lite(o.trim);    x.fillRect(bx + (bw>>1) - 1, 37, 2, 2);
+    x.fillStyle = o.trim;  x.fillRect(bx, 27, bw, 2);
+    x.fillRect(bx+2, 36, bw-4, 4);
+    x.fillStyle = sh(o.trim,.6); x.fillRect(bx + (bw>>1) - 3, 36, 6, 4);
+    x.fillStyle = lite(o.trim);  x.fillRect(bx + (bw>>1) - 1, 37, 2, 2);
 
-    // ================= FEET (rows 54-61) =================
-    x.fillStyle = '#2a2014';
+    // chest plate over the robe
+    if (eq.chest != null){
+      x.fillStyle = MET;  x.fillRect(bx+3, 28, bw-6, 12);
+      x.fillStyle = METL; x.fillRect(bx+3, 28, bw-6, 2);
+      x.fillStyle = METD; x.fillRect(bx + (bw>>1) - 1, 30, 2, 10);
+      x.fillStyle = rc(eq.chest); x.fillRect(bx+3, 39, bw-6, 2);   // rarity band
+      // pauldrons
+      x.fillStyle = MET;  x.fillRect(bx-1, 26, 7, 5); x.fillRect(bx+bw-6, 26, 7, 5);
+      x.fillStyle = rc(eq.chest); x.fillRect(bx-1, 26, 7, 1); x.fillRect(bx+bw-6, 26, 7, 1);
+    }
+    // greaves peeking under the hem
+    if (eq.pants != null){
+      x.fillStyle = METD; x.fillRect(bx+3, 50, bw-6, 4);
+      x.fillStyle = rc(eq.pants); x.fillRect(bx+3, 50, bw-6, 1);
+    }
+
+    // ===== FEET / BOOTS =====
+    const bootC = eq.boots != null ? MET : '#2a2014';
+    const bootD = eq.boots != null ? METD : '#1a140c';
+    x.fillStyle = bootC;
     x.fillRect(bx+4, 54, 9, 6 - sw);
     x.fillRect(bx+bw-13, 54, 9, 3 + sw);
-    x.fillStyle = '#1a140c';
+    x.fillStyle = bootD;
     x.fillRect(bx+4, 59 - sw, 9, 2);
     x.fillRect(bx+bw-13, 56 + sw, 9, 2);
+    if (eq.boots != null){
+      x.fillStyle = rc(eq.boots);
+      x.fillRect(bx+4, 54, 9, 1); x.fillRect(bx+bw-13, 54, 9, 1);
+    }
 
-    // ================= ARMS =================
+    // ===== ARMS / GLOVES / WEAPONS =====
+    const handC = eq.gloves != null ? MET : o.skin;
     if (side){
-      // back arm tucked
       x.fillStyle = sh(o.robe, .5); x.fillRect(bx+2, 30, 4, 13);
-      // front arm reaches to the VERTICAL staff carried before you
       x.fillStyle = o.robe2;        x.fillRect(bx+bw-8, 30 + sw, 12, 7);
       x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-8, 35 + sw, 12, 2);
-      x.fillStyle = o.trim;         x.fillRect(bx+bw+1, 30 + sw, 3, 7); // cuff
-      x.fillStyle = o.skin;         x.fillRect(bx+bw+4, 31 + sw, 4, 5); // hand
-      if (kind === 'player' && !bare){ // walking staff, upright
+      x.fillStyle = eq.gloves != null ? rc(eq.gloves) : o.trim;
+      x.fillRect(bx+bw+1, 30 + sw, 3, 7);
+      x.fillStyle = handC; x.fillRect(bx+bw+4, 31 + sw, 4, 5);
+      if (kind === 'player' && !bare){
         const stx = bx + bw + 6;
         x.fillStyle = '#6d4528';    x.fillRect(stx, 10, 4, 48);
         x.fillStyle = '#8a5a3a';    x.fillRect(stx, 10, 2, 48);
-        x.fillStyle = '#4a2f1c';    x.fillRect(stx, 30 + sw, 4, 8);     // grip wrap
-        x.fillRect(stx, 33 + sw, 4, 1);
-        x.fillStyle = o.trim;       x.fillRect(stx-2, 3, 8, 8);         // gem
-        x.fillStyle = lite(o.trim); x.fillRect(stx-1, 4, 3, 3);
+        x.fillStyle = '#4a2f1c';    x.fillRect(stx, 30 + sw, 4, 8);
+        const gem = eq.w1 != null ? rc(eq.w1) : o.trim;
+        x.fillStyle = gem;          x.fillRect(stx-2, 3, 8, 8);
+        x.fillStyle = lite(gem);    x.fillRect(stx-1, 4, 3, 3);
         x.fillStyle = '#cdb4ff';    x.fillRect(stx, 5, 2, 2);
-        x.fillStyle = o.skin;       x.fillRect(stx-1, 31 + sw, 6, 5);   // hand grips it
+        x.fillStyle = handC;        x.fillRect(stx-1, 31 + sw, 6, 5);
+        if (eq.w2 != null){ // offhand hilt over the shoulder
+          x.fillStyle = '#6d4528'; x.fillRect(bx-2, 22, 3, 10);
+          x.fillStyle = rc(eq.w2); x.fillRect(bx-3, 19, 5, 4);
+        }
       }
     } else {
-      // two sleeves, opposite swing
       x.fillStyle = o.robe2;
       x.fillRect(8, 29 + sw, 8, 16);
       x.fillRect(48, 32 - sw, 8, 16);
       x.fillStyle = lite(o.robe2);
       x.fillRect(8, 29 + sw, 2, 16); x.fillRect(48, 32 - sw, 2, 16);
-      x.fillStyle = o.trim;          // cuffs
+      x.fillStyle = eq.gloves != null ? rc(eq.gloves) : o.trim;
       x.fillRect(8, 43 + sw, 8, 3); x.fillRect(48, 46 - sw, 8, 3);
-      x.fillStyle = o.skin;          // hands
+      x.fillStyle = handC;
       x.fillRect(9, 46 + sw, 6, 5); x.fillRect(49, 49 - sw, 6, 5);
-      x.fillStyle = sh(o.skin, .8);
+      x.fillStyle = sh(handC.startsWith('#') ? handC : MET, .8);
       x.fillRect(9, 49 + sw, 6, 2); x.fillRect(49, 52 - sw, 6, 2);
-      if (kind === 'player' && !bare){ // staff at the side, upright
+      if (kind === 'player' && !bare){
         const stx = up ? 6 : 54;
         x.fillStyle = '#6d4528';     x.fillRect(stx, 14, 4, 44);
         x.fillStyle = '#8a5a3a';     x.fillRect(stx, 14, 2, 44);
         x.fillStyle = '#4a2f1c';     x.fillRect(stx, 44, 4, 8);
-        x.fillStyle = o.trim;        x.fillRect(stx-2, 6, 8, 9);
-        x.fillStyle = lite(o.trim);  x.fillRect(stx-1, 7, 3, 4);
+        const gem = eq.w1 != null ? rc(eq.w1) : o.trim;
+        x.fillStyle = gem;           x.fillRect(stx-2, 6, 8, 9);
+        x.fillStyle = lite(gem);     x.fillRect(stx-1, 7, 3, 4);
         x.fillStyle = '#cdb4ff';     x.fillRect(stx, 8, 2, 3);
+        if (eq.w2 != null){ // second weapon on the other side
+          const stx2 = up ? 54 : 6;
+          x.fillStyle = '#6d4528';   x.fillRect(stx2, 18, 3, 36);
+          x.fillStyle = rc(eq.w2);   x.fillRect(stx2-2, 11, 7, 8);
+          x.fillStyle = lite(rc(eq.w2)); x.fillRect(stx2-1, 12, 3, 3);
+        }
       }
     }
 
-    // ================= HEAD (rows 4-26) =================
+    // cape over the back when seen from behind
+    if (eq.cape != null && up){
+      const cc = sh(rc(eq.cape), .6);
+      x.fillStyle = cc; x.fillRect(bx+2, 28, bw-4, 26);
+      x.fillStyle = sh(rc(eq.cape), .4);
+      x.fillRect(bx+6, 32, 2, 20); x.fillRect(bx+bw-8, 32, 2, 20);
+      x.fillRect(bx+2, 51, bw-4, 3);
+      x.fillStyle = rc(eq.cape); x.fillRect(bx+2, 28, bw-4, 2); // clasp band
+    }
+
+    // ===== HEAD =====
     if (up){
       x.fillStyle = o.hood ? o.robe : (o.hair || '#3a2c1c');
       x.fillRect(18, 6, 28, 22);
       x.fillStyle = o.hood ? o.robe2 : sh(o.hair || '#3a2c1c', .8);
       x.fillRect(22, 10, 20, 16);
       x.fillStyle = sh(o.robe, .6);
-      if (o.hood) x.fillRect(30, 6, 4, 22);             // hood seam
+      if (o.hood) x.fillRect(30, 6, 4, 22);
       x.fillStyle = lite(o.hood ? o.robe : (o.hair || '#3a2c1c'));
-      x.fillRect(18, 6, 28, 2);                          // crown light
+      x.fillRect(18, 6, 28, 2);
     } else {
-      // face
       x.fillStyle = o.skin;          x.fillRect(20, 9, 24, 19);
-      x.fillStyle = sh(o.skin, .85); x.fillRect(20, 23, 24, 5);  // jaw
-      x.fillStyle = lite(o.skin);    x.fillRect(22, 10, 20, 2);  // forehead light
+      x.fillStyle = sh(o.skin, .85); x.fillRect(20, 23, 24, 5);
+      x.fillStyle = lite(o.skin);    x.fillRect(22, 10, 20, 2);
       if (o.hood){
         x.fillStyle = o.robe;
-        x.fillRect(16, 4, 32, 7);                        // hood top
-        x.fillRect(16, 4, 5, 26); x.fillRect(43, 4, 5, 26); // sides
-        x.fillStyle = lite(o.robe); x.fillRect(17, 4, 30, 2); // rim light
-        x.fillStyle = o.robe2;      x.fillRect(20, 9, 24, 2); // inner rim
+        x.fillRect(16, 4, 32, 4);
+        x.fillRect(16, 4, 5, 26); x.fillRect(43, 4, 5, 26);
+        x.fillStyle = lite(o.robe); x.fillRect(17, 4, 30, 2);
+        x.fillStyle = o.robe2;      x.fillRect(20, 9, 24, 2);
         x.fillStyle = sh(o.robe, .55);
-        x.fillRect(21, 11, 4, 3); x.fillRect(39, 11, 4, 3);   // brow shadow
+        x.fillRect(21, 11, 4, 3); x.fillRect(39, 11, 4, 3);
       } else {
         const hr = o.hair || '#3a2c1c';
         x.fillStyle = hr;
@@ -442,28 +500,55 @@ const SPR = (() => {
         x.fillStyle = lite(hr);    x.fillRect(17, 4, 30, 2);
         x.fillStyle = sh(hr, .7);  x.fillRect(16, 10, 32, 2);
       }
-      // eyes with whites + pupils, nose, mouth
       if (side){
         x.fillStyle = '#f4f0e4'; x.fillRect(36, 15, 5, 5);
         x.fillStyle = dark;      x.fillRect(38, 16, 3, 4);
-        x.fillStyle = sh(o.skin, .8); x.fillRect(43, 20, 2, 3); // nose
-        x.fillStyle = sh(o.skin, .6); x.fillRect(34, 25, 7, 2); // mouth
+        x.fillStyle = sh(o.skin, .8); x.fillRect(43, 20, 2, 3);
+        x.fillStyle = sh(o.skin, .6); x.fillRect(34, 25, 7, 2);
       } else {
         x.fillStyle = '#f4f0e4';
         x.fillRect(23, 15, 6, 5); x.fillRect(35, 15, 6, 5);
         x.fillStyle = dark;
         x.fillRect(25, 16, 3, 4); x.fillRect(37, 16, 3, 4);
-        x.fillStyle = sh(o.skin, .8); x.fillRect(31, 19, 2, 4); // nose
-        x.fillStyle = sh(o.skin, .6); x.fillRect(28, 25, 8, 2); // mouth
+        x.fillStyle = sh(o.skin, .8); x.fillRect(31, 19, 2, 4);
+        x.fillStyle = sh(o.skin, .6); x.fillRect(28, 25, 8, 2);
       }
+    }
+
+    // ===== HELM (over hood/hair) =====
+    if (eq.helm != null){
+      x.fillStyle = MET;
+      x.fillRect(16, 2, 32, 7);                      // dome
+      x.fillRect(15, 7, 4, 12); x.fillRect(45, 7, 4, 12); // cheek guards
+      x.fillStyle = METL; x.fillRect(17, 2, 30, 2);
+      x.fillStyle = METD; x.fillRect(16, 7, 32, 2);
+      x.fillStyle = rc(eq.helm); x.fillRect(28, 0, 8, 3); // crest
+      if (!up && !side){ x.fillStyle = METD; x.fillRect(30, 9, 4, 6); } // nose guard
+    }
+
+    // amulet pendant at the collar
+    if (eq.amulet != null && !up && !side){
+      x.fillStyle = '#8a8268'; x.fillRect(30, 28, 4, 1);
+      x.fillStyle = rc(eq.amulet); x.fillRect(30, 29, 4, 4);
+      x.fillStyle = lite(rc(eq.amulet)); x.fillRect(31, 30, 1, 1);
     }
     return c;
   }
 
   const actorCache = {};
+  function playerEq(){
+    if (typeof G === 'undefined' || !G.gear || !G.gear.equip) return null;
+    const e = G.gear.equip;
+    const r = g => g ? g.rar : null;
+    return { helm:r(e.helm), chest:r(e.chest), pants:r(e.pants), boots:r(e.boots),
+      gloves:r(e.gloves), cape:r(e.cape), amulet:r(e.amulet),
+      w1:r(e.weapon1), w2:r(e.weapon2) };
+  }
   function actor(kind, dir, step, bare){
-    const k = `${kind}_${dir}_${step?1:0}_${bare?1:0}`;
-    if (!actorCache[k]) actorCache[k] = actorCanvas(kind, dir, step, bare);
+    const eq = kind === 'player' ? playerEq() : null;
+    const sig = eq ? Object.values(eq).map(v => v == null ? '-' : v).join('') : '';
+    const k = `${kind}_${dir}_${step?1:0}_${bare?1:0}_${sig}`;
+    if (!actorCache[k]) actorCache[k] = actorCanvas(kind, dir, step, bare, eq);
     return actorCache[k];
   }
 
