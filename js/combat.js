@@ -133,8 +133,11 @@ const Combat = (() => {
   }
   function moveEnt(e, dx, dy, dt){
     const nx = e.x + dx * dt, ny = e.y + dy * dt;
-    if (!World.solidPx(nx, e.y)) e.x = nx;
-    if (!World.solidPx(e.x, ny)) e.y = ny;
+    // an entity somehow inside solid ground (e.g. dragged into water) may always
+    // move — it can escape, never gets wedged
+    const stuck = World.solidPx(e.x, e.y);
+    if (stuck || !World.solidPx(nx, e.y)) e.x = nx;
+    if (stuck || !World.solidPx(e.x, ny)) e.y = ny;
   }
 
   // ---------- damage ----------
@@ -451,7 +454,7 @@ const Combat = (() => {
   function updateProj(p, dt){
     p.ttl -= dt;
     p.x += p.vx*dt; p.y += p.vy*dt;
-    if (p.ttl <= 0 || World.solidPx(p.x, p.y)){ ents = ents.filter(x => x !== p); return; }
+    if (p.ttl <= 0 || World.shotBlockedPx(p.x, p.y)){ ents = ents.filter(x => x !== p); return; }
     if (p.ally){
       const e = nearestEnemy(p.x, p.y, 22);
       if (e){ hurtEnemy(e, p.dmg, 'SPIRIT'); ents = ents.filter(x => x !== p); }

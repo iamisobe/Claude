@@ -60,10 +60,9 @@ function initTouch(){
   document.body.classList.add('touch-on');
   for (const btn of wrap.querySelectorAll('.tbtn')){
     const key = btn.dataset.key;
-    const isDir = key.startsWith('Arrow');
     const down = ev => { ev.preventDefault(); btn.classList.add('down'); fireKey('keydown', key); };
     const up   = ev => { ev.preventDefault(); btn.classList.remove('down');
-      if (isDir) fireKey('keyup', key); };           // directions are held; actions are taps
+      fireKey('keyup', key); };   // all buttons report release (A is HELD while reeling fish)
     btn.addEventListener('touchstart', down, { passive:false });
     btn.addEventListener('touchend',   up,   { passive:false });
     btn.addEventListener('touchcancel',up,   { passive:false });

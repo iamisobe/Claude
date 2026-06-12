@@ -106,13 +106,11 @@ button:disabled { opacity:.35; cursor:default; }
 /* Fishing */
 #fishing { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
   background:var(--panel); border:3px solid var(--border); border-radius:8px;
-  padding:18px 26px; z-index:35; text-align:center; width:420px; }
-#fish-title { color:var(--accent); margin-bottom:12px; letter-spacing:2px; }
-#fish-track { position:relative; height:26px; background:#0b0812; border:2px solid var(--border);
-  border-radius:5px; overflow:hidden; }
-#fish-zone { position:absolute; top:0; bottom:0; background:#2e7d32; opacity:.9; }
-#fish-marker { position:absolute; top:0; bottom:0; width:8px; background:var(--gold); }
-#fish-hint { margin-top:10px; font-size:12px; color:#8a7fa8; }
+  padding:14px 22px; z-index:35; text-align:center; }
+#fish-title { color:var(--accent); margin-bottom:10px; letter-spacing:2px; font-size:13px; }
+#fish-cv { display:block; margin:0 auto; image-rendering:pixelated;
+  background:#101626; border:2px solid var(--border); border-radius:6px; }
+#fish-hint { margin-top:10px; font-size:11px; color:#8a7fa8; max-width:220px; }
 
 /* Toast */
 #toast { position:absolute; top:40px; left:50%; transform:translateX(-50%);

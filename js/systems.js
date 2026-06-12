@@ -100,32 +100,135 @@ const Systems = (() => {
     }
   }
 
-  // ---------- fishing ----------
-  function fishGame(zonePct){
+  // ---------- fishing: cast → wait → bite → reel struggle ----------
+  let fxFish = null; // {x,y,phase:'cast'|'wait'|'bite'|'reel', t, dip} — drawn by World
+  function fishingFx(){ return fxFish; }
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // wait for the bite; resolves 'hit' | 'early' | 'miss' | 'cancel'
+  function waitPhase(biteAfter, nibbleTimes){
     return new Promise(res => {
-      const box = $('fishing'), zone = $('fish-zone'), marker = $('fish-marker');
-      box.classList.remove('hidden');
-      const zoneW = zonePct, zoneX = 5 + Math.random() * (90 - zoneW);
-      zone.style.left = zoneX + '%'; zone.style.width = zoneW + '%';
-      let t = Math.random() * 6, done = false, raf;
-      const speed = 2.4 + Math.random() * 1.2;
-      function frame(){
-        t += 0.016 * speed;
-        marker.style.left = ((Math.sin(t) + 1) / 2 * 95) + '%';
-        if (!done) raf = requestAnimationFrame(frame);
-      }
-      raf = requestAnimationFrame(frame);
+      let done = false;
+      const timers = [];
+      for (const t of nibbleTimes)
+        timers.push(setTimeout(() => { if (fxFish) fxFish.dip = performance.now(); }, t));
+      timers.push(setTimeout(() => {
+        if (!fxFish) return;
+        fxFish.phase = 'bite';
+        fxFish.t = performance.now();
+        timers.push(setTimeout(() => finish('miss'), 900)); // strike window
+      }, biteAfter));
       const h = k => {
-        if (k !== 'ok' && k !== 'no') return;
+        if (k === 'ok') finish(fxFish && fxFish.phase === 'bite' ? 'hit' : 'early');
+        else if (k === 'no') finish('cancel');
+      };
+      function finish(r){
+        if (done) return;
         done = true;
+        timers.forEach(clearTimeout);
+        Input.pop(h);
+        res(r);
+      }
+      Input.push(h);
+    });
+  }
+
+  // hold-to-lift reel struggle; resolves true if landed
+  function reelGame(sp, lvl){
+    return new Promise(res => {
+      $('fishing').classList.remove('hidden');
+      const cv = $('fish-cv'), c = cv.getContext('2d');
+      c.imageSmoothingEnabled = false;
+      // silhouette of the (still unknown) catch
+      const sil = document.createElement('canvas');
+      sil.width = sil.height = 16;
+      const sc = sil.getContext('2d');
+      sc.drawImage(SPR.creature(sp), 0, 0);
+      sc.globalCompositeOperation = 'source-in';
+      sc.fillStyle = '#0d1320';
+      sc.fillRect(0, 0, 16, 16);
+
+      const trackTop = 16, trackH = 252, trackX = 38, trackW = 84;
+      const fl = skillLvl('fishing'), rod = Inv.bestRod();
+      const barH = Math.min(170, 64 + fl * 2.2 + rod * 6 + 6 * plotTier('pondshack'));
+      let barY = trackTop + trackH - barH, vy = 0;
+      let fishY = barY + barH / 2, fishTgt = fishY, retarget = 0.8; // starts hooked, inside the bar
+      const feisty = 36 + lvl * 2.8 + (DEX[sp].rare ? 50 : 0);
+      let prog = 42, last = performance.now(), raf, doneFlag = false;
+
+      function update(dt, now){
+        // catch bar physics: hold A to lift
+        vy += (Input.held.ok ? -560 : 460) * dt;
+        vy *= 0.92;
+        barY += vy * dt;
+        if (barY < trackTop){ barY = trackTop; vy *= -0.25; }
+        if (barY > trackTop + trackH - barH){ barY = trackTop + trackH - barH; vy *= -0.25; }
+        // fish darts around
+        retarget -= dt;
+        if (retarget <= 0){
+          retarget = 0.4 + Math.random() * 1.1;
+          fishTgt = trackTop + 14 + Math.random() * (trackH - 28);
+        }
+        const d = fishTgt - fishY;
+        fishY += Math.sign(d) * Math.min(Math.abs(d), feisty * dt) + Math.sin(now / 90) * 0.6;
+        // progress: a slow tug-of-war, not a coin flip
+        const inside = fishY >= barY - 5 && fishY <= barY + barH + 5;
+        prog += (inside ? 15 : -(8 + lvl * 0.22)) * dt;
+        window._reelDbg = { barY, barH, fishY, prog };
+      }
+      function draw(now){
+        c.clearRect(0, 0, 220, 300);
+        // water shimmer
+        c.fillStyle = '#0d1320'; c.fillRect(trackX, trackTop, trackW, trackH);
+        c.strokeStyle = '#564a78'; c.strokeRect(trackX - 1, trackTop - 1, trackW + 2, trackH + 2);
+        for (let i = 0; i < 5; i++){
+          c.fillStyle = 'rgba(93,138,232,0.10)';
+          c.fillRect(trackX, trackTop + ((now / 26 + i * 55) % trackH), trackW, 7);
+        }
+        // catch bar
+        const stress = Input.held.ok ? 0.95 : 0.75;
+        c.fillStyle = `rgba(109,216,109,${0.30 * stress})`;
+        c.fillRect(trackX + 2, barY, trackW - 4, barH);
+        c.strokeStyle = '#6dd86d'; c.strokeRect(trackX + 2, barY, trackW - 4, barH);
+        // fishing line + fish silhouette (wiggling)
+        c.strokeStyle = '#8a8268';
+        c.beginPath(); c.moveTo(trackX + trackW / 2, trackTop); c.lineTo(trackX + trackW / 2, fishY - 12); c.stroke();
+        const wig = Math.sin(now / 70) * (Input.held.ok ? 5 : 2.5);
+        c.save();
+        c.translate(trackX + trackW / 2 + wig, fishY);
+        c.rotate(Math.sin(now / 120) * 0.25);
+        c.drawImage(sil, -16, -16, 32, 32);
+        c.restore();
+        // progress meter
+        c.fillStyle = '#0b0812'; c.fillRect(160, trackTop, 22, trackH);
+        c.strokeStyle = '#564a78'; c.strokeRect(159, trackTop - 1, 24, trackH + 2);
+        const ph = trackH * Math.max(0, Math.min(1, prog / 100));
+        c.fillStyle = prog > 70 ? '#e8c95d' : '#6dd86d';
+        c.fillRect(161, trackTop + trackH - ph, 20, ph);
+        c.fillStyle = '#8a7fa8'; c.font = '10px monospace';
+        c.fillText('CATCH', 152, trackTop + trackH + 18);
+        c.fillText('???', trackX + trackW / 2 - 10, trackTop + trackH + 18);
+      }
+      function frame(now){
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        update(dt, now);
+        draw(now);
+        if (prog >= 100) return end(true);
+        if (prog <= 0) return end(false);
+        raf = requestAnimationFrame(frame);
+      }
+      const h = k => { if (k === 'no') end(false); };
+      function end(win){
+        if (doneFlag) return;
+        doneFlag = true;
         cancelAnimationFrame(raf);
         Input.pop(h);
-        box.classList.add('hidden');
-        if (k === 'no') return res(false);
-        const pos = parseFloat(marker.style.left);
-        res(pos >= zoneX && pos <= zoneX + zoneW + 2);
-      };
+        $('fishing').classList.add('hidden');
+        res(win);
+      }
       Input.push(h);
+      raf = requestAnimationFrame(frame);
     });
   }
 
@@ -147,21 +250,49 @@ const Systems = (() => {
       (!e.moon || (e.moon === 'new' && moon === 0) || (e.moon === 'full' && moon === 2)));
     pool = pool.map(e => ({ ...e,
       w: e.w * (e.rod > 1 && bait ? 1 + ITEMS[bait].tier : 1) * (e.rod > 1 ? 1 + 0.2 * plotTier('pier') : 1) }));
-    const zonePct = Math.min(50, 16 + fl * 1.1 + rod * 2 + 6 * plotTier('pondshack'));
-    const hit = await fishGame(zonePct);
-    if (!hit){
-      skillAdd('fishing', 3);
-      return UI.say('The line snaps back, empty. Something laughs beneath the surface.');
-    }
     const e = pickW(pool);
     const lvl = e.min + rnd(e.max - e.min + 1) + Math.floor(fl / 2);
-    skillAdd('fishing', 12 + lvl + (DEX[e.sp].rare ? 50 : 0));
-    // the catch erupts from the water and attacks!
-    const [fx, fy] = World.faceVec();
-    Combat.spawnEnemy(e.sp, lvl, {
-      x: World.ppx + fx * TILE * 1.6, y: World.ppy + fy * TILE * 1.6 - 10,
-      aggro: true, hooked: true });
-    UI.toast(`You hooked a ${DEX[e.sp].n} (Lv.${lvl})${DEX[e.sp].rare ? ' — a LEGEND of the deep!' : '!'} It fights back!`);
+
+    // CAST: bobber arcs out
+    const [fxv, fyv] = World.faceVec();
+    const bobX = World.ppx + fxv * TILE * 1.8, bobY = World.ppy + fyv * TILE * 1.8;
+    fxFish = { x: bobX, y: bobY, phase: 'cast', t: performance.now(), dip: 0 };
+    skillAdd('fishing', 2);
+    await wait(650);
+    if (!fxFish) return;
+    fxFish.phase = 'wait';
+    fxFish.t = performance.now();
+
+    // WAIT: nibbles tease, then the real bite
+    const biteAfter = Math.max(1500,
+      2500 + rnd(5500) - (bait ? ITEMS[bait].tier * 600 : 0) - fl * 40);
+    const nibbles = [];
+    const n = rnd(3);
+    for (let i = 0; i < n; i++) nibbles.push(600 + rnd(Math.max(400, biteAfter - 1200)));
+    const r = await waitPhase(biteAfter, nibbles);
+    if (r !== 'hit'){
+      fxFish = null;
+      if (r === 'early') UI.toast('Too soon! The line comes back empty.');
+      else if (r === 'miss'){ skillAdd('fishing', 3); UI.toast('It spat the hook and vanished...'); }
+      return;
+    }
+
+    // REEL: the struggle
+    fxFish.phase = 'reel';
+    const landed = await reelGame(e.sp, lvl);
+    fxFish = null;
+    if (!landed){
+      skillAdd('fishing', 4);
+      return UI.toast('The line goes slack — it escapes into the dark.');
+    }
+    skillAdd('fishing', 14 + lvl + (DEX[e.sp].rare ? 50 : 0));
+    // the catch leaps out of the water ONTO LAND beside you — never stranded in the lake
+    let sx = World.ppx, sy = World.ppy - 34;
+    for (const [ox, oy] of [[0,-44],[44,0],[-44,0],[0,44],[34,-34],[-34,-34],[0,0]]){
+      if (!World.solidPx(World.ppx + ox, World.ppy + oy)){ sx = World.ppx + ox; sy = World.ppy + oy; break; }
+    }
+    Combat.spawnEnemy(e.sp, lvl, { x: sx, y: sy, aggro: true, hooked: true });
+    UI.toast(`LANDED: a ${DEX[e.sp].n} (Lv.${lvl})${DEX[e.sp].rare ? ' — a LEGEND of the deep!' : '!'} It bursts onto the bank, furious!`);
   }
 
   // ---------- manor (the housing tutorial) ----------
@@ -622,8 +753,9 @@ const Systems = (() => {
       G.flags.metEli = true;
       Inv.add('oldrod', 1); Inv.add('worm', 5);
       return UI.say(['"New blood! The lake\'s full of drowned things that bite."',
-        '"Here — my old rod and some grubs. Face the water and press Z to cast."',
-        '"Fair warning: what you hook comes up ANGRY. Land it, then jar it if you fancy it."'], 'Fisher Eli');
+        '"Here — my old rod and some grubs. Face the water, press the button, and WAIT. Patience is the whole sport."',
+        '"Ignore the nibbles. When the bobber PLUNGES — strike! Then HOLD ON and keep the brute in the green while you reel."',
+        '"Fair warning: what you land comes up ANGRY. Beat it, then jar it if you fancy it."'], 'Fisher Eli');
     }
     const tips = [
       '"Phantfin only rise at night. Lanternjaw? New moon, Bone Rod or better."',
@@ -746,7 +878,7 @@ const Systems = (() => {
     } catch { return null; }
   }
 
-  return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish,
+  return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish, fishingFx,
     restore, placeFurniture, sleep, storage, cauldron, altar, manorDone,
     enterCata, descend, ascend, chest, arena, arenaExit, rivalDefeated, woodsDuel,
     plotMenu, deedsMenu, gearMenu,

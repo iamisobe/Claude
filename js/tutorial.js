@@ -41,10 +41,11 @@ const Tutorial = (() => {
         'Fisher Eli idles by the lake on the east side. Talk to him — face him and press A. He owes me a favour.'],
       check: () => !!G.flags.metEli },
 
-    { icon:'🎣', obj:'Face the water and press A to cast. Stop the bobber in the green!',
+    { icon:'🎣', obj:'Cast (A at the water), wait for the "!", strike, then HOLD A to reel it in!',
       intro:['Rod in hand! Stand at the water\'s edge, FACE the water, and press A to cast.',
-        'When the gold bobber crosses the GREEN band, press A again. Whatever bites comes up ANGRY — land it, fight it, jar it if you fancy it.',
-        'Some fish bite only at night; the rarest only under a new or full moon.'],
+        'Then WAIT. The bobber will twitch — ignore the little nibbles. When it PLUNGES and you see "!", strike fast with A!',
+        'Then the fight: HOLD A to lift the hook, let go to drop it. Keep the fish inside the green band until the CATCH meter fills.',
+        'Whatever you land comes up ANGRY — beat it, jar it if you fancy it. Some fish bite only at night; the rarest under a new or full moon.'],
       check: () => (G.skills.fishing || 0) > 0 },
 
     { icon:'☘', obj:'Plant a seed: walk to the farm plots (north-east, by the fence) and press A at a soil plot.',

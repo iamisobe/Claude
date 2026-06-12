@@ -242,6 +242,8 @@ const World = (() => {
     return false;
   }
   function solidPx(px, py){ return solidTile(tileOf(px), tileOf(py)); }
+  // what stops projectiles: walls and trees, but NOT water — bolts fly over the lake
+  function shotBlockedPx(px, py){ return '#BrWX'.includes(tileAt(tileOf(px), tileOf(py))); }
   function furnitureList(){
     if (W.map === 'manor') return G.manor.furniture;
     if (W.map === 'house' && W.houseId) return G.houses[W.houseId].furniture;
@@ -440,6 +442,7 @@ const World = (() => {
     }
     // combat layer (enemies, minions, projectiles, drops, floaters)
     Combat.draw(ctx, camX, camY);
+    drawBobber(ctx, camX, camY);
     // npcs
     for (const n of npcs()){
       ctx.drawImage(SPR.actor(n.kind, n.dir ?? 0, 0), Math.round(n.x*TILE - camX), Math.round(n.y*TILE - camY), TILE, TILE);
@@ -470,6 +473,53 @@ const World = (() => {
     }
   }
 
+  // fishing bobber: cast arc, splash, idle ripples, nibbles, bite plunge
+  function drawBobber(ctx, camX, camY){
+    const ff = typeof Systems !== 'undefined' && Systems.fishingFx && Systems.fishingFx();
+    if (!ff) return;
+    const now = performance.now();
+    const px = W.ppx - camX, py = W.ppy - camY - 14;
+    let bx = ff.x - camX, by = ff.y - camY;
+    if (ff.phase === 'cast'){
+      const t = Math.min(1, (now - ff.t) / 650);
+      bx = px + (bx - px) * t;
+      by = (py + (by - py) * t) - Math.sin(t * Math.PI) * 42;
+      if (t >= 0.97){ // splash
+        ctx.strokeStyle = 'rgba(138,216,232,0.8)';
+        ctx.beginPath(); ctx.arc(ff.x - camX, ff.y - camY, 10, 0, 7); ctx.stroke();
+      }
+    } else {
+      const dipAge = now - (ff.dip || 0);
+      const nib = dipAge < 320 ? 6 : 0;
+      const sink = ff.phase === 'bite' ? 9 : ff.phase === 'reel' ? 12 : 0;
+      by += Math.sin(now / 380) * 2.5 + nib + sink;
+      // ripples
+      const rt = (now / 900) % 1;
+      ctx.strokeStyle = `rgba(138,216,232,${0.5 * (1 - rt)})`;
+      ctx.beginPath(); ctx.arc(bx, by - sink + 4, 6 + rt * 16, 0, 7); ctx.stroke();
+      if (ff.phase === 'bite' || (nib && dipAge < 160)){
+        ctx.strokeStyle = 'rgba(138,216,232,0.9)';
+        ctx.beginPath(); ctx.arc(bx, by + 2, 9, 0, 7); ctx.stroke();
+      }
+      if (ff.phase === 'bite'){
+        ctx.fillStyle = '#e8c95d';
+        ctx.font = 'bold 26px monospace';
+        ctx.fillText('!', bx - 5, by - 26 + Math.sin(now / 80) * 3);
+      }
+    }
+    // line from rod to bobber
+    ctx.strokeStyle = 'rgba(232,224,208,0.45)';
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.quadraticCurveTo((px + bx) / 2, Math.min(py, by) - 18, bx, by - 4);
+    ctx.stroke();
+    // the bobber itself
+    ctx.fillStyle = '#e8442e';
+    ctx.beginPath(); ctx.arc(bx, by, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f8ecd0';
+    ctx.beginPath(); ctx.arc(bx, by - 2, 2.5, 0, 7); ctx.fill();
+  }
+
   function locName(){
     if (W.map === 'house' && W.houseId) return PLOTS[W.houseId].n;
     return { town:'Grimvale', woods:'Murkwood', manor:'Hollow Manor', arena:'Soul Arena',
@@ -478,7 +528,7 @@ const World = (() => {
 
   return {
     enter, update, draw, rawKey, face, locName, tileAt, setTile, faceVec, npcs, interactable,
-    solidTile, solidPx,
+    solidTile, solidPx, shotBlockedPx,
     get active(){ return W.active; }, set active(v){ W.active = v; },
     get map(){ return W.map; },
     get px(){ return tileOf(W.ppx); }, get py(){ return tileOf(W.ppy); },
