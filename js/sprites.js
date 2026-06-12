@@ -64,11 +64,41 @@ const SPR = (() => {
     octx.putImageData(od, 0, 0);
     return out;
   }
+  // detail synthesis: contour outline, top-left rim light, under-shadow.
+  // unlike pure upscaling this ADDS form information to the sprite.
+  function detailPass(c){
+    const w = c.width, h = c.height, ctx = c.getContext('2d');
+    const img = ctx.getImageData(0, 0, w, h), d = img.data;
+    const alpha = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : d[(y*w + x)*4 + 3];
+    const out = ctx.createImageData(w, h);
+    out.data.set(d);
+    const o = out.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+      const i = (y*w + x) * 4;
+      if (d[i+3] === 0){
+        // contour: transparent pixel hugging the silhouette becomes outline
+        if (alpha(x+1,y) || alpha(x-1,y) || alpha(x,y+1) || alpha(x,y-1)){
+          o[i] = 12; o[i+1] = 9; o[i+2] = 18; o[i+3] = 255;
+        }
+      } else {
+        const top = !alpha(x, y-1), left = !alpha(x-1, y), bot = !alpha(x, y+1);
+        if (top || left){       // rim light from the upper-left
+          o[i]   = Math.min(255, d[i]   * 1.45 + 18);
+          o[i+1] = Math.min(255, d[i+1] * 1.45 + 18);
+          o[i+2] = Math.min(255, d[i+2] * 1.45 + 18);
+        } else if (bot){        // grounded shadow along the underside
+          o[i] = d[i] * .62; o[i+1] = d[i+1] * .62; o[i+2] = d[i+2] * .62;
+        }
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+    return c;
+  }
   function creature(key){
     const k = 'cr_'+key;
     if (!cache[k]){
       const s = DEX[key];
-      cache[k] = scale2x(drawArt(s.art, s.pal, !!s.sym)); // 32x32, defined
+      cache[k] = detailPass(scale2x(drawArt(s.art, s.pal, !!s.sym)));
     }
     return cache[k];
   }
@@ -287,99 +317,134 @@ const SPR = (() => {
     rival:  { robe:'#17131f', robe2:'#241e30', skin:'#cdc4b8', hood:true,  trim:'#e8442e' },
   };
   function actorCanvas(kind, dir, step){
-    // 32×32 detailed body · dir: 0 down, 1 up, 2 left, 3 right · 2 walk frames
+    // 64×64, genuinely drawn detail · dir: 0 down 1 up 2 left 3 right
     const o = OUTFITS[kind] || OUTFITS.rival;
-    const c = cv(32,32), x = c.getContext('2d');
+    const c = cv(64,64), x = c.getContext('2d');
     const flip = dir === 2;
-    if (flip){ x.translate(32,0); x.scale(-1,1); }
+    if (flip){ x.translate(64,0); x.scale(-1,1); }
     const side = dir === 2 || dir === 3;
     const up = dir === 1;
-    const sw = step ? 2 : 0;                 // walk-cycle swing
+    const sw = step ? 3 : 0;
     const dark = '#17131f';
-    const shade = (hex, f) => {
+    const sh = (hex, f, add = 0) => {
       const n = parseInt(hex.slice(1), 16);
-      return `rgb(${((n>>16)&255)*f|0},${((n>>8)&255)*f|0},${(n&255)*f|0}`+')';
+      const r = Math.min(255, ((n>>16)&255)*f + add | 0);
+      const g2 = Math.min(255, ((n>>8)&255)*f + add | 0);
+      const b = Math.min(255, (n&255)*f + add | 0);
+      return `rgb(${r},${g2},${b})`;
     };
+    const lite = h2 => sh(h2, 1.3, 14);
 
-    // ---- robe body (rows 16-27) ----
-    x.fillStyle = o.robe;  x.fillRect(9,16,14,12);
-    x.fillStyle = o.robe2; x.fillRect(11,17,10,10);
-    x.fillStyle = shade(o.robe, .7); // fold lines + hem
-    x.fillRect(13,18,1,9); x.fillRect(18,18,1,9); x.fillRect(9,27,14,1);
-    x.fillStyle = o.trim;  x.fillRect(9,16,14,1);  // collar
-    x.fillRect(10,20,12,2);                        // belt
-    x.fillStyle = shade(o.trim,.6); x.fillRect(15,20,2,2); // buckle
-    // feet (alternate stride)
+    // ================= BODY (rows 27-54) =================
+    const bx = side ? 20 : 16, bw = side ? 24 : 32;
+    x.fillStyle = sh(o.robe, .8);  x.fillRect(bx, 27, bw, 27);          // robe base
+    x.fillStyle = o.robe;          x.fillRect(bx+2, 27, bw-4, 25);
+    x.fillStyle = o.robe2;         x.fillRect(bx+5, 29, bw-10, 21);     // front panel
+    x.fillStyle = lite(o.robe2);   x.fillRect(bx+5, 29, 2, 21);         // left-light
+    x.fillStyle = sh(o.robe, .55); // folds + hem shadow
+    x.fillRect(bx + (bw>>2), 40, 2, 12);
+    x.fillRect(bx + bw - (bw>>2) - 2, 40, 2, 12);
+    x.fillRect(bx, 52, bw, 2);
+    x.fillStyle = o.trim;          x.fillRect(bx, 27, bw, 2);           // collar
+    x.fillRect(bx+2, 36, bw-4, 4);                                      // belt
+    x.fillStyle = sh(o.trim, .55); x.fillRect(bx + (bw>>1) - 3, 36, 6, 4); // buckle
+    x.fillStyle = lite(o.trim);    x.fillRect(bx + (bw>>1) - 1, 37, 2, 2);
+
+    // ================= FEET (rows 54-61) =================
     x.fillStyle = '#2a2014';
-    x.fillRect(10, 28, 5, 3 - (sw ? 2 : 0));
-    x.fillRect(17, 28, 5, 1 + (sw ? 2 : 0));
+    x.fillRect(bx+4, 54, 9, 6 - sw);
+    x.fillRect(bx+bw-13, 54, 9, 3 + sw);
     x.fillStyle = '#1a140c';
-    x.fillRect(10, 30 - (sw ? 2 : 0), 5, 1);
-    x.fillRect(17, 28 + (sw ? 2 : 0), 5, 1);
+    x.fillRect(bx+4, 59 - sw, 9, 2);
+    x.fillRect(bx+bw-13, 56 + sw, 9, 2);
 
-    // ---- arms ----
+    // ================= ARMS =================
     if (side){
-      // back arm hint along the body
-      x.fillStyle = shade(o.robe, .65); x.fillRect(10, 18, 2, 7);
-      // front arm reaches forward, swinging with the stride
-      x.fillStyle = o.robe2; x.fillRect(16, 18 + sw, 7, 4);
-      x.fillStyle = shade(o.robe2, .75); x.fillRect(16, 21 + sw, 7, 1);
-      x.fillStyle = o.skin;  x.fillRect(23, 19 + sw, 2, 2);
-      if (kind === 'player'){ // staff thrust forward
-        x.fillStyle = '#8a5a3a'; x.fillRect(21, 17 + sw, 11, 2);
-        x.fillStyle = '#6d4528'; x.fillRect(21, 18 + sw, 11, 1);
-        x.fillStyle = o.trim;    x.fillRect(30, 15 + sw, 2, 4);
-        x.fillStyle = '#cdb4ff'; x.fillRect(30, 16 + sw, 1, 1);
+      // back arm tucked
+      x.fillStyle = sh(o.robe, .5); x.fillRect(bx+2, 30, 4, 13);
+      // front arm reaches to the VERTICAL staff carried before you
+      x.fillStyle = o.robe2;        x.fillRect(bx+bw-8, 30 + sw, 12, 7);
+      x.fillStyle = sh(o.robe2,.7); x.fillRect(bx+bw-8, 35 + sw, 12, 2);
+      x.fillStyle = o.trim;         x.fillRect(bx+bw+1, 30 + sw, 3, 7); // cuff
+      x.fillStyle = o.skin;         x.fillRect(bx+bw+4, 31 + sw, 4, 5); // hand
+      if (kind === 'player'){       // walking staff, upright
+        const stx = bx + bw + 6;
+        x.fillStyle = '#6d4528';    x.fillRect(stx, 10, 4, 48);
+        x.fillStyle = '#8a5a3a';    x.fillRect(stx, 10, 2, 48);
+        x.fillStyle = '#4a2f1c';    x.fillRect(stx, 30 + sw, 4, 8);     // grip wrap
+        x.fillRect(stx, 33 + sw, 4, 1);
+        x.fillStyle = o.trim;       x.fillRect(stx-2, 3, 8, 8);         // gem
+        x.fillStyle = lite(o.trim); x.fillRect(stx-1, 4, 3, 3);
+        x.fillStyle = '#cdb4ff';    x.fillRect(stx, 5, 2, 2);
+        x.fillStyle = o.skin;       x.fillRect(stx-1, 31 + sw, 6, 5);   // hand grips it
       }
     } else {
-      // two sleeves swinging in opposite phase
+      // two sleeves, opposite swing
       x.fillStyle = o.robe2;
-      x.fillRect(6, 16 + sw, 4, 8);
-      x.fillRect(22, 18 - sw, 4, 8);
-      x.fillStyle = shade(o.robe2, .75);
-      x.fillRect(6, 22 + sw, 4, 1); x.fillRect(22, 24 - sw, 4, 1);
-      x.fillStyle = o.skin;
-      x.fillRect(7, 24 + sw, 3, 2);
-      x.fillRect(23, 26 - sw, 3, 2);
-      if (kind === 'player'){ // staff held at the side
-        const sxp = up ? 4 : 27;
-        x.fillStyle = '#8a5a3a'; x.fillRect(sxp, 9, 2, 20);
-        x.fillStyle = '#6d4528'; x.fillRect(sxp+1, 9, 1, 20);
-        x.fillStyle = o.trim;    x.fillRect(sxp-1, 5, 4, 4);
-        x.fillStyle = '#cdb4ff'; x.fillRect(sxp, 6, 2, 1);
+      x.fillRect(8, 29 + sw, 8, 16);
+      x.fillRect(48, 32 - sw, 8, 16);
+      x.fillStyle = lite(o.robe2);
+      x.fillRect(8, 29 + sw, 2, 16); x.fillRect(48, 32 - sw, 2, 16);
+      x.fillStyle = o.trim;          // cuffs
+      x.fillRect(8, 43 + sw, 8, 3); x.fillRect(48, 46 - sw, 8, 3);
+      x.fillStyle = o.skin;          // hands
+      x.fillRect(9, 46 + sw, 6, 5); x.fillRect(49, 49 - sw, 6, 5);
+      x.fillStyle = sh(o.skin, .8);
+      x.fillRect(9, 49 + sw, 6, 2); x.fillRect(49, 52 - sw, 6, 2);
+      if (kind === 'player'){        // staff at the side, upright
+        const stx = up ? 6 : 54;
+        x.fillStyle = '#6d4528';     x.fillRect(stx, 14, 4, 44);
+        x.fillStyle = '#8a5a3a';     x.fillRect(stx, 14, 2, 44);
+        x.fillStyle = '#4a2f1c';     x.fillRect(stx, 44, 4, 8);
+        x.fillStyle = o.trim;        x.fillRect(stx-2, 6, 8, 9);
+        x.fillStyle = lite(o.trim);  x.fillRect(stx-1, 7, 3, 4);
+        x.fillStyle = '#cdb4ff';     x.fillRect(stx, 8, 2, 3);
       }
     }
 
-    // ---- head (rows 2-15) ----
+    // ================= HEAD (rows 4-26) =================
     if (up){
       x.fillStyle = o.hood ? o.robe : (o.hair || '#3a2c1c');
-      x.fillRect(9,3,14,13);
-      x.fillStyle = o.hood ? o.robe2 : shade(o.hair || '#3a2c1c', .8);
-      x.fillRect(11,5,10,9);
-      if (o.hood){ x.fillStyle = shade(o.robe, .7); x.fillRect(15,3,2,13); }
+      x.fillRect(18, 6, 28, 22);
+      x.fillStyle = o.hood ? o.robe2 : sh(o.hair || '#3a2c1c', .8);
+      x.fillRect(22, 10, 20, 16);
+      x.fillStyle = sh(o.robe, .6);
+      if (o.hood) x.fillRect(30, 6, 4, 22);             // hood seam
+      x.fillStyle = lite(o.hood ? o.robe : (o.hair || '#3a2c1c'));
+      x.fillRect(18, 6, 28, 2);                          // crown light
     } else {
       // face
-      x.fillStyle = o.skin; x.fillRect(10,5,12,11);
-      x.fillStyle = shade(o.skin, .85); x.fillRect(10,13,12,3); // jaw shading
+      x.fillStyle = o.skin;          x.fillRect(20, 9, 24, 19);
+      x.fillStyle = sh(o.skin, .85); x.fillRect(20, 23, 24, 5);  // jaw
+      x.fillStyle = lite(o.skin);    x.fillRect(22, 10, 20, 2);  // forehead light
       if (o.hood){
         x.fillStyle = o.robe;
-        x.fillRect(8,2,16,4);                        // hood top
-        x.fillRect(8,2,2,14); x.fillRect(22,2,2,14); // hood sides
-        x.fillStyle = o.robe2; x.fillRect(9,3,14,2); // inner rim
-        x.fillStyle = shade(o.robe, .6);
-        x.fillRect(10,6,2,2); x.fillRect(20,6,2,2);  // rim shadow on brow
+        x.fillRect(16, 4, 32, 7);                        // hood top
+        x.fillRect(16, 4, 5, 26); x.fillRect(43, 4, 5, 26); // sides
+        x.fillStyle = lite(o.robe); x.fillRect(17, 4, 30, 2); // rim light
+        x.fillStyle = o.robe2;      x.fillRect(20, 9, 24, 2); // inner rim
+        x.fillStyle = sh(o.robe, .55);
+        x.fillRect(21, 11, 4, 3); x.fillRect(39, 11, 4, 3);   // brow shadow
       } else {
-        x.fillStyle = o.hair || '#3a2c1c';
-        x.fillRect(8,2,16,4); x.fillRect(8,4,2,7); x.fillRect(22,4,2,7);
-        x.fillStyle = shade(o.hair || '#3a2c1c', .75); x.fillRect(8,5,16,1);
+        const hr = o.hair || '#3a2c1c';
+        x.fillStyle = hr;
+        x.fillRect(16, 4, 32, 8); x.fillRect(16, 9, 5, 13); x.fillRect(43, 9, 5, 13);
+        x.fillStyle = lite(hr);    x.fillRect(17, 4, 30, 2);
+        x.fillStyle = sh(hr, .7);  x.fillRect(16, 10, 32, 2);
       }
-      // eyes (+brow shadow) and mouth
-      x.fillStyle = dark;
-      if (side){ x.fillRect(18,9,2,3); x.fillRect(15,13,4,1); }
-      else {
-        x.fillRect(12,9,2,3); x.fillRect(18,9,2,3);
-        x.fillStyle = shade(o.skin, .8); x.fillRect(12,8,2,1); x.fillRect(18,8,2,1);
-        x.fillStyle = shade(o.skin, .7); x.fillRect(14,13,4,1);
+      // eyes with whites + pupils, nose, mouth
+      if (side){
+        x.fillStyle = '#f4f0e4'; x.fillRect(36, 15, 5, 5);
+        x.fillStyle = dark;      x.fillRect(38, 16, 3, 4);
+        x.fillStyle = sh(o.skin, .8); x.fillRect(43, 20, 2, 3); // nose
+        x.fillStyle = sh(o.skin, .6); x.fillRect(34, 25, 7, 2); // mouth
+      } else {
+        x.fillStyle = '#f4f0e4';
+        x.fillRect(23, 15, 6, 5); x.fillRect(35, 15, 6, 5);
+        x.fillStyle = dark;
+        x.fillRect(25, 16, 3, 4); x.fillRect(37, 16, 3, 4);
+        x.fillStyle = sh(o.skin, .8); x.fillRect(31, 19, 2, 4); // nose
+        x.fillStyle = sh(o.skin, .6); x.fillRect(28, 25, 8, 2); // mouth
       }
     }
     return c;

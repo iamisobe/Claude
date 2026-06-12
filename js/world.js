@@ -537,23 +537,23 @@ const World = (() => {
     // combat layer (enemies, minions, projectiles, drops, floaters)
     Combat.draw(ctx, camX, camY);
     drawBobber(ctx, camX, camY);
-    // npcs (shadow + idle sway)
+    // npcs (shadow + idle sway) — 64px detailed bodies, feet on the tile
     const nowT = performance.now();
     for (const n of npcs()){
       const nx = n.x*TILE - camX + TILE/2, ny = n.y*TILE - camY;
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.beginPath(); ctx.ellipse(nx, ny + TILE - 6, 13, 5, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(nx, ny + TILE - 5, 15, 5, 0, 0, 7); ctx.fill();
       ctx.drawImage(SPR.actor(n.kind, n.dir ?? 0, 0),
-        Math.round(nx - TILE/2), Math.round(ny + Math.sin(nowT/700 + n.x) * 1.2), TILE, TILE);
+        Math.round(nx - 32), Math.round(ny + TILE - 62 + Math.sin(nowT/700 + n.x) * 1.2), 64, 64);
     }
     // player: shadow, walk/idle bob, swing + cast animations
     const px = W.ppx - camX, py = W.ppy - camY;
     const moving = Input.held.left || Input.held.right || Input.held.up || Input.held.down;
     const bobY = moving ? Math.sin(nowT/130) * 1.6 : Math.sin(nowT/600) * 1.0;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(px, py + 15, 13, 5, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px, py + 16, 15, 5, 0, 0, 7); ctx.fill();
     ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0),
-      Math.round(px - TILE/2), Math.round(py - TILE/2 - 8 + bobY), TILE, TILE);
+      Math.round(px - 32), Math.round(py - 44 + bobY), 64, 64);
     if (G.pc && G.pc.swing > 0){
       // staff sweeps through the strike arc
       const prog = 1 - G.pc.swing / 0.18;

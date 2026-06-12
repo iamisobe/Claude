@@ -771,7 +771,7 @@ const Systems = (() => {
           <div class="char-top">
             <div class="paperdoll">
               <div class="eq-col" id="eq-left"></div>
-              <canvas class="pc" width="32" height="32"></canvas>
+              <canvas class="pc" width="64" height="64"></canvas>
               <div class="eq-col" id="eq-right"></div>
             </div>
             <div class="char-stats">${statsHTML()}</div>
