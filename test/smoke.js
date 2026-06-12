@@ -35,7 +35,7 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
-const files = ['data.js','sprites.js','ui.js','combat.js','world.js','systems.js','tutorial.js','main.js'];
+const files = ['data.js','sprites.js','audio.js','ui.js','combat.js','world.js','systems.js','tutorial.js','main.js'];
 for (const f of files){
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8');
   vm.runInContext(src, sandbox, { filename: f });
@@ -284,6 +284,21 @@ vm.runInContext(`(${function tests(check){
   // moon fish availability: at least one fish at rod 1, day, any moon
   const basePool = FISH_TABLE.filter(e => e.rod <= 1 && !e.night && !e.moon);
   check('rod-1 daytime fish exists', basePool.length >= 1);
+
+  // ---- audio ----
+  check('SFX module exists', typeof SFX === 'object' && typeof SFX.play === 'function');
+  for (const n of ['swing','hit','bolt','blast','kill','roar','hurt','shield','shieldBreak',
+    'cast','heal','pickup','gear','jar','jarFail','levelup','quest','ui','chop','splash',
+    'bite','door','sleep'])
+    check(`SFX recipe ${n} exists`, SFX.names().includes(n));
+  check('SFX.play is safe without an AudioContext', (() => { SFX.play('hit'); return true; })());
+  check('SFX.unlock is safe without an AudioContext', (() => { SFX.unlock(); return true; })());
+  check('SFX sound/music toggles flip', (() => {
+    const a = SFX.soundOn(), b = SFX.toggleSound();
+    const c = SFX.musicOn(), d = SFX.toggleMusic();
+    SFX.toggleSound(); SFX.toggleMusic();
+    return a !== b && c !== d && SFX.soundOn() === a && SFX.musicOn() === c;
+  })());
 }})`, sandbox)(check);
 
 console.log(fails ? `\n${fails} FAILURES` : '\nAll smoke tests passed.');

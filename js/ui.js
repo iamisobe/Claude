@@ -29,6 +29,7 @@ function normKey(e){
   return null;
 }
 document.addEventListener('keydown', e => {
+  if (typeof SFX !== 'undefined' && e.isTrusted) SFX.unlock();
   Input.keys[e.key] = true;
   const k = normKey(e);
   if (k){
@@ -70,7 +71,8 @@ function initTouch(){
   document.body.classList.add('touch-on');
   for (const btn of wrap.querySelectorAll('.tbtn')){
     const key = btn.dataset.key;
-    const down = ev => { ev.preventDefault(); btn.classList.add('down'); fireKey('keydown', key); };
+    const down = ev => { ev.preventDefault(); if (typeof SFX !== 'undefined') SFX.unlock();
+      btn.classList.add('down'); fireKey('keydown', key); };
     const up   = ev => { ev.preventDefault(); btn.classList.remove('down');
       fireKey('keyup', key); };   // all buttons report release (A is HELD while reeling fish)
     btn.addEventListener('touchstart', down, { passive:false });
@@ -85,7 +87,7 @@ function initTouch(){
 
 function initHotbar(){
   for (const el of document.querySelectorAll('.hslot')){
-    const fire = ev => { ev.preventDefault();
+    const fire = ev => { ev.preventDefault(); if (typeof SFX !== 'undefined') SFX.unlock();
       if (G.started && !Input.top()) Combat.castSkill((G.hotbar || [])[+el.dataset.i]); };
     el.addEventListener('click', fire);
     el.addEventListener('touchstart', fire, { passive:false });
@@ -160,7 +162,8 @@ const UI = (() => {
     paint();
     box.classList.remove('hidden');
     let resolve;
-    function done(v){ box.classList.add('hidden'); Input.pop(h); resolve(v); }
+    function done(v){ if (typeof SFX !== 'undefined') SFX.play('ui');
+      box.classList.add('hidden'); Input.pop(h); resolve(v); }
     const h = k => {
       if (k === 'up'){ sel = (sel+options.length-1)%options.length; paint(); }
       else if (k === 'down'){ sel = (sel+1)%options.length; paint(); }
@@ -250,7 +253,8 @@ const UI = (() => {
     paint();
     p.classList.remove('hidden');
     let resolve;
-    function done(v){ p.classList.add('hidden'); Input.pop(h); resolve(v); }
+    function done(v){ if (typeof SFX !== 'undefined') SFX.play('ui');
+      p.classList.add('hidden'); Input.pop(h); resolve(v); }
     const h = k => {
       if (!rows.length){ if (k==='no'||k==='ok') done(-1); return; }
       if (k === 'up'){ sel = (sel+rows.length-1)%rows.length; paint(); }

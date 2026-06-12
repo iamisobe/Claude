@@ -258,6 +258,7 @@ const World = (() => {
   }
 
   function enter(map, x, y){
+    if (typeof SFX !== 'undefined' && G.started && W.map && W.map !== map) SFX.play('door');
     if (G.stats){ G.stats.zones = G.stats.zones || {}; if (ZONES[map]) G.stats.zones[map] = true; }
     if (map === 'cata' && !W.cata) W.cata = genCata(W.cataFloor);
     W.map = map;

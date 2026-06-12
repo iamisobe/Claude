@@ -9,6 +9,7 @@ const Combat = (() => {
   let ents = [];      // enemies, projectiles, drops, floaters, fx
   let minions = [];   // live minion bodies (built from G.party)
   let dying = false;
+  const snd = n => { if (typeof SFX !== 'undefined') SFX.play(n); };
 
   // ---------- player derived stats ----------
   function pstats(){
@@ -183,6 +184,7 @@ const Combat = (() => {
     const tm = attType ? typeMult(attType, DEX[e.sp].ty) : 1;
     const final = Math.max(1, Math.round(dmg * tm * (0.9 + Math.random()*0.2)));
     e.hp -= final; e.aggro = true; e.hurtT = 0.15;
+    snd('hit');
     particles(e.x, e.y - 8, 3, TYPES[DEX[e.sp].ty[0]].col, { speed: 80 });
     floater(e.x, e.y - 24, String(final), tm > 1 ? '#e8c95d' : tm < 1 ? '#8a7fa8' : '#e8e0d0');
     if (srcXY){ const d = Math.hypot(e.x-srcXY.x, e.y-srcXY.y) || 1;
@@ -198,10 +200,12 @@ const Combat = (() => {
       G.pc.shield -= ab;
       dmg -= ab;
       floater(World.ppx, World.ppy - 28, `(${Math.round(ab)})`, '#8ad8e8');
-      if (G.pc.shield <= 0) playFX('shards', World.ppx, World.ppy - 8, { soft: true, fps: 22 });
+      if (G.pc.shield <= 0){ snd('shieldBreak'); playFX('shards', World.ppx, World.ppy - 8, { soft: true, fps: 22 }); }
+      else snd('shield');
       if (dmg <= 0){ G.pc.inv = 0.4; return; }
     }
     G.pc.hp -= Math.max(1, Math.round(dmg));
+    snd('hurt');
     G.pc.inv = 0.7;
     G.pc.flinch = 0.22;
     shakeAmp = Math.max(shakeAmp, 0.25);
@@ -228,6 +232,7 @@ const Combat = (() => {
 
   function killEnemy(e){
     ents = ents.filter(x => x !== e);
+    snd(e.boss ? 'roar' : 'kill');
     playFX('soulburst', e.x, e.y - 8, { scale: e.boss ? 1.8 : 1, fps: 18 });
     particles(e.x, e.y - 10, 10, '#9b6dff', { speed: 60, up: 70, gravity: -40, size: 3 });
     flashT = Math.max(flashT, e.boss ? 0.3 : 0.09);
@@ -254,6 +259,7 @@ const Combat = (() => {
       const oldMax = statsFor(g.sp, g.lvl).maxhp;
       g.lvl++;
       g.hp = Math.min(statsFor(g.sp, g.lvl).maxhp, g.hp + statsFor(g.sp, g.lvl).maxhp - oldMax);
+      snd('levelup');
       UI.toast(`${g.nick} grew to Lv.${g.lvl}!`);
       const ev = DEX[g.sp].ev;
       if (ev && g.lvl >= ev.lvl){
@@ -307,6 +313,7 @@ const Combat = (() => {
     const ps = pstats();
     G.pc.atkCd = 0.38;
     G.pc.swing = 0.18;
+    snd('swing');
     const [fx, fy] = World.faceVec();
     playFX('slash', World.ppx + fx*34, World.ppy - 6 + fy*34, { rot: Math.atan2(fy, fx), fps: 26 });
     const reach = 1 + 0.2 * treeRank('sweep');   // Wide Sweep
@@ -333,6 +340,7 @@ const Combat = (() => {
     G.pc.soul -= cost;
     G.pc.boltCd = 0.55;
     G.pc.cast = 0.18;
+    snd('bolt');
     const t = nearestEnemy(World.ppx, World.ppy, 430);
     let tx, ty;
     if (t){ tx = t.x; ty = t.y; }
@@ -371,6 +379,7 @@ const Combat = (() => {
     floater(e.x, e.y - 34, ITEMS[jarId].n + '!', '#8ad8e8');
     if (Math.random() < c){
       ents = ents.filter(x => x !== e);
+      snd('jar');
       poof(e.x, e.y, '#8ad8e8');
       const g = makeGrim(e.sp, e.lvl);
       g.hp = Math.floor(statsFor(e.sp, e.lvl).maxhp * 0.6);
@@ -386,6 +395,7 @@ const Combat = (() => {
         UI.toast(`★ BOUND ${g.nick} (Lv.${g.lvl}) — sent to storage (pack is full).`);
       }
     } else {
+      snd('jarFail');
       UI.toast(`${DEX[e.sp].n} broke free!`);
       e.aggro = true; e.rage = 2.5;
     }
@@ -525,6 +535,7 @@ const Combat = (() => {
       if (e.burstCd <= 0 && td < 420){
         e.burstCd = 6;
         shakeAmp = Math.max(shakeAmp, 0.35);
+        snd('blast');
         playFX('blast', e.x, e.y - 8, { scale: 1.6, fps: 20 });
         for (let i = 0; i < 10; i++){
           const a = i/10 * Math.PI*2;
@@ -574,6 +585,7 @@ const Combat = (() => {
       const e = nearestEnemy(p.x, p.y, 22);
       if (e){
         const dealt = hurtEnemy(e, p.dmg, 'SPIRIT');
+        snd('blast');
         playFX('blast', p.x, p.y, { scale: treeRank('nova') ? 1.4 : 0.8, fps: 24 });
         if (p.heal && dealt){
           G.pc.hp = Math.min(pstats().maxhp, G.pc.hp + dealt * p.heal);
@@ -602,10 +614,10 @@ const Combat = (() => {
     const dd = Math.hypot(d.x-World.ppx, d.y-World.ppy);
     if (dd < 140){ d.x += (World.ppx-d.x)*4*dt; d.y += (World.ppy-d.y)*4*dt; } // magnet
     if (dd < 26){
-      if (d.gold){ G.gold += d.gold; floater(World.ppx, World.ppy-30, '+'+d.gold+'⛁', '#e8c95d'); }
-      else if (d.item){ Inv.add(d.item, d.n); UI.toast(`Picked up ${ITEMS[d.item].n}.`); }
+      if (d.gold){ G.gold += d.gold; snd('pickup'); floater(World.ppx, World.ppy-30, '+'+d.gold+'⛁', '#e8c95d'); }
+      else if (d.item){ Inv.add(d.item, d.n); snd('pickup'); UI.toast(`Picked up ${ITEMS[d.item].n}.`); }
       else if (d.gear){
-        if (G.gear.bag.length < 60){ G.gear.bag.push(d.gear);
+        if (G.gear.bag.length < 60){ G.gear.bag.push(d.gear); snd('gear');
           UI.toast(`${RARITIES[d.gear.rar].n.toUpperCase()} loot: ${d.gear.name}!`); }
         else UI.toast('Gear bag full!');
       }
@@ -758,6 +770,7 @@ const Combat = (() => {
     G.pc.soul -= A.soul;
     G.pc.cds[id] = A.cd;
     G.pc.cast = 0.18;
+    snd(id === 'vigor' || id === 'coil' ? 'heal' : 'cast');
     playFX('circle', World.ppx, World.ppy + 12, { fps: 22 });
     const [fx, fy] = World.faceVec();
     const tgt = nearestEnemy(World.ppx, World.ppy, 430);

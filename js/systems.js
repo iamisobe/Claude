@@ -6,6 +6,7 @@
 
 const Systems = (() => {
   const nowMin = () => G.time.day * 1440 + G.time.min;
+  const snd = n => { if (typeof SFX !== 'undefined') SFX.play(n); };
 
   // ---------- skills ----------
   function skillLvl(s){ return skillLevel(G.skills[s] || 0); }
@@ -13,7 +14,8 @@ const Systems = (() => {
     const old = skillLvl(s);
     G.skills[s] = (G.skills[s] || 0) + Math.floor(xp);
     const nw = skillLvl(s);
-    if (nw > old) UI.toast(`${SKILLS[s].icon} ${SKILLS[s].n} rose to Lv.${nw}!${s === 'necromancy' ? ' (+1 talent point)' : ''}`);
+    if (nw > old){ snd('levelup');
+      UI.toast(`${SKILLS[s].icon} ${SKILLS[s].n} rose to Lv.${nw}!${s === 'necromancy' ? ' (+1 talent point)' : ''}`); }
   }
 
   function healAll(){
@@ -116,6 +118,7 @@ const Systems = (() => {
       timers.push(setTimeout(() => {
         if (!fxFish) return;
         fxFish.phase = 'bite';
+        snd('bite');
         fxFish.t = performance.now();
         timers.push(setTimeout(() => finish('miss'), 900)); // strike window
       }, biteAfter));
@@ -264,6 +267,7 @@ const Systems = (() => {
     const [fxv, fyv] = World.faceVec();
     const bobX = World.ppx + fxv * TILE * 1.8, bobY = World.ppy + fyv * TILE * 1.8;
     fxFish = { x: bobX, y: bobY, phase: 'cast', t: performance.now(), dip: 0 };
+    snd('splash');
     skillAdd('fishing', 2);
     await wait(650);
     if (!fxFish) return;
@@ -293,6 +297,7 @@ const Systems = (() => {
       return UI.toast('The line goes slack — it escapes into the dark.');
     }
     // CAUGHT! The rod did the work — now choose its fate.
+    snd('gear');
     G.dex[e.sp] = Math.max(G.dex[e.sp] || 0, 1);
     skillAdd('fishing', 14 + lvl + (DEX[e.sp].rare ? 50 : 0));
     const itemId = 'fish_' + e.sp;
@@ -303,6 +308,7 @@ const Systems = (() => {
     const c = await UI.choice(opts, { cancelable:false });
     if (c === 1 && jarId){
       Inv.take(jarId, 1);
+      snd('jar');
       const g = makeGrim(e.sp, lvl);
       G.dex[e.sp] = 2;
       skillAdd('necromancy', 20 + lvl * 2);
@@ -336,6 +342,7 @@ const Systems = (() => {
     const hits = (World.nodeHits[key] || 0) + 1;
     World.nodeHits[key] = hits;
     G.pc.swing = 0.18; // swing the staff at it
+    snd('chop');
     if (hits < N.hits){
       Combat.floatText(x*TILE + 24, y*TILE + 10, '✦', '#e8c95d');
       return;
@@ -347,6 +354,7 @@ const Systems = (() => {
       UI.toast('Double yield!');
     }
     if (t === 'Q' && Math.random() < 0.20 * plotTier('hillfort')) qty++;
+    snd('pickup');
     Inv.add(item, qty);
     G.stats[item === 'plank' ? 'planks' : item] = (G.stats[item === 'plank' ? 'planks' : item] || 0) + qty;
     skillAdd('gathering', t === 'Q' ? ORE_XP[item] : N.xp);
@@ -411,6 +419,7 @@ const Systems = (() => {
     if (!(await UI.confirm('Sleep until morning? You and your grims will fully recover.'))) return;
     G.time.day++; G.time.min = 6 * 60;
     G.flags.slept = true;
+    snd('sleep');
     healAll();
     save();
     await UI.say(`You dream of ${['endless staircases','a fish with your name','singing pumpkins','the moon, blinking','a polite skeleton'][rnd(5)]}... and wake refreshed. (${UI.moonPhase() === 2 ? 'The moon is FULL tonight.' : UI.moonPhase() === 0 ? 'The moon is NEW tonight.' : 'Day ' + G.time.day})`);
@@ -1183,6 +1192,7 @@ const Systems = (() => {
         for (const [k, n] of Object.entries(q.reward.items || {})) Inv.add(k, n);
         G.quest.i = i + 1;
         if (currentQuest().bounty) G.quest.bountyBase = G.kills || 0;
+        snd('quest');
         UI.toast(`★ ${q.n} complete! +${rewardTxt}`);
         save();
       } else if (pick === 0){
@@ -1195,11 +1205,15 @@ const Systems = (() => {
   async function pauseMenu(){
     if (G.tut) G.tut.menuOpened = true;
     for(;;){
+      const sfxOk = typeof SFX !== 'undefined';
       const base = ['Pack', 'Character', 'Talents', 'Satchel', 'Ledger', 'Skills', 'Deeds', 'Grimdex', 'Save'];
+      if (sfxOk) base.push(`Sound: ${SFX.soundOn() ? 'ON' : 'OFF'}`, `Music: ${SFX.musicOn() ? 'ON' : 'OFF'}`);
       const opts = Tutorial.active() ? base.concat(['Skip tutorial', 'Close']) : base.concat(['Close']);
       const c = await UI.choice(opts);
       const pick = c < 0 ? 'Close' : opts[c];
       if (pick === 'Close') return;
+      if (pick.startsWith('Sound:')){ UI.toast(`Sound ${SFX.toggleSound() ? 'on' : 'off'}.`); continue; }
+      if (pick.startsWith('Music:')){ UI.toast(`Music ${SFX.toggleMusic() ? 'on' : 'off'}.`); continue; }
       if (pick === 'Skip tutorial'){
         if (await UI.confirm('Skip the rest of the tutorial? Morwen will stop guiding you.')) Tutorial.skip();
         continue;
