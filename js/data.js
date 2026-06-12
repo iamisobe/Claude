@@ -553,12 +553,13 @@ const GEAR_SLOTS = {
   pants:  { bases:['Gravewalker Leggings','Sodden Trousers','Marsh Greaves','Pale Breeches'], pref:['hp','speed','regen'] },
   boots:  { bases:['Mud Boots','Crypt Striders','Wisp Slippers','Iron-shod Boots'],   pref:['speed','speed','gold'] },
   gloves: { bases:["Digger's Gloves",'Bone Knuckles','Silk Mitts','Ashen Grips'],     pref:['dmg','capture','bolt'] },
+  cape:   { bases:["Mourner's Cape",'Raven Mantle','Mist Shroud','Tatterwing'],       pref:['regen','speed','xp'] },
   amulet: { bases:['Moon Locket','Wax Seal','Ghost Bell','Knuckle Charm'],            pref:['capture','minion','gold'] },
   ring:   { bases:['Wormwood Band','Vein Ring','Moon Loop','Sealed Signet'],          pref:['gold','xp','bolt','capture'] },
 };
 // what your body actually wears (two ring fingers)
 // two hands, two ring fingers — dual wielding welcome
-const EQUIP_KEYS = ['weapon1','weapon2','helm','chest','pants','boots','gloves','amulet','ring1','ring2'];
+const EQUIP_KEYS = ['weapon1','weapon2','helm','cape','chest','pants','boots','gloves','amulet','ring1','ring2'];
 const keySlot = k => k.startsWith('ring') ? 'ring' : k.startsWith('weapon') ? 'weapon' : k;
 const GEAR_PREFIX = ['Whispering','Sodden','Cursed','Moonlit','Smouldering','Rotten','Gleaming','Wormy','Sainted','Umbral'];
 const RARITIES = [

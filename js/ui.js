@@ -210,7 +210,7 @@ const UI = (() => {
       r.className = 'row';
       if (it.spr){
         const c = document.createElement('canvas');
-        c.width = 16; c.height = 16;
+        c.width = it.spr.width; c.height = it.spr.height;
         c.getContext('2d').drawImage(it.spr, 0, 0);
         r.appendChild(c);
       }

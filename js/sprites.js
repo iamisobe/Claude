@@ -33,11 +33,42 @@ const SPR = (() => {
     }
     return c;
   }
+  // Scale2x (EPX): doubles resolution while smoothing staircase edges,
+  // giving sprites real added definition without any blur
+  function scale2x(src){
+    const w = src.width, h = src.height;
+    const out = cv(w*2, h*2);
+    const sctx = src.getContext('2d'), octx = out.getContext('2d');
+    const sd = sctx.getImageData(0, 0, w, h).data;
+    const od = octx.createImageData(w*2, h*2);
+    const px = (x, y) => {
+      if (x < 0 || y < 0 || x >= w || y >= h) return 0;
+      const i = (y*w + x) * 4;
+      return sd[i] << 24 | sd[i+1] << 16 | sd[i+2] << 8 | sd[i+3];
+    };
+    const set = (x, y, v) => {
+      const i = (y*w*2 + x) * 4;
+      od.data[i] = v >>> 24; od.data[i+1] = (v >> 16) & 255;
+      od.data[i+2] = (v >> 8) & 255; od.data[i+3] = v & 255;
+    };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+      const P = px(x,y), A = px(x,y-1), B = px(x+1,y), C = px(x-1,y), D = px(x,y+1);
+      let e1 = P, e2 = P, e3 = P, e4 = P;
+      if (C === A && C !== D && A !== B) e1 = A;
+      if (A === B && A !== C && B !== D) e2 = B;
+      if (D === C && D !== B && C !== A) e3 = C;
+      if (B === D && B !== A && D !== C) e4 = D;
+      set(x*2, y*2, e1); set(x*2+1, y*2, e2);
+      set(x*2, y*2+1, e3); set(x*2+1, y*2+1, e4);
+    }
+    octx.putImageData(od, 0, 0);
+    return out;
+  }
   function creature(key){
     const k = 'cr_'+key;
     if (!cache[k]){
       const s = DEX[key];
-      cache[k] = drawArt(s.art, s.pal, !!s.sym);
+      cache[k] = scale2x(drawArt(s.art, s.pal, !!s.sym)); // 32x32, defined
     }
     return cache[k];
   }
@@ -256,67 +287,104 @@ const SPR = (() => {
     rival:  { robe:'#17131f', robe2:'#241e30', skin:'#cdc4b8', hood:true,  trim:'#e8442e' },
   };
   function actorCanvas(kind, dir, step){
-    // dir: 0 down, 1 up, 2 left, 3 right · two walk frames swing arms+legs
+    // 32×32 detailed body · dir: 0 down, 1 up, 2 left, 3 right · 2 walk frames
     const o = OUTFITS[kind] || OUTFITS.rival;
-    const c = cv(16,16), x = c.getContext('2d');
+    const c = cv(32,32), x = c.getContext('2d');
     const flip = dir === 2;
-    if (flip){ x.translate(16,0); x.scale(-1,1); }
+    if (flip){ x.translate(32,0); x.scale(-1,1); }
     const side = dir === 2 || dir === 3;
     const up = dir === 1;
-    const sw = step ? 1 : 0;          // walk-cycle phase
+    const sw = step ? 2 : 0;                 // walk-cycle swing
+    const dark = '#17131f';
+    const shade = (hex, f) => {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgb(${((n>>16)&255)*f|0},${((n>>8)&255)*f|0},${(n&255)*f|0}`+')';
+    };
 
-    // ---- robe body ----
-    x.fillStyle = o.robe;  x.fillRect(5,8,6,6);
-    x.fillStyle = o.robe2; x.fillRect(6,9,4,4);
-    x.fillStyle = o.trim;  x.fillRect(5,8,6,1);
+    // ---- robe body (rows 16-27) ----
+    x.fillStyle = o.robe;  x.fillRect(9,16,14,12);
+    x.fillStyle = o.robe2; x.fillRect(11,17,10,10);
+    x.fillStyle = shade(o.robe, .7); // fold lines + hem
+    x.fillRect(13,18,1,9); x.fillRect(18,18,1,9); x.fillRect(9,27,14,1);
+    x.fillStyle = o.trim;  x.fillRect(9,16,14,1);  // collar
+    x.fillRect(10,20,12,2);                        // belt
+    x.fillStyle = shade(o.trim,.6); x.fillRect(15,20,2,2); // buckle
     // feet (alternate stride)
     x.fillStyle = '#2a2014';
-    x.fillRect(5, 14, 2, sw ? 1 : 2);
-    x.fillRect(9, 14, 2, sw ? 2 : 1);
+    x.fillRect(10, 28, 5, 3 - (sw ? 2 : 0));
+    x.fillRect(17, 28, 5, 1 + (sw ? 2 : 0));
+    x.fillStyle = '#1a140c';
+    x.fillRect(10, 30 - (sw ? 2 : 0), 5, 1);
+    x.fillRect(17, 28 + (sw ? 2 : 0), 5, 1);
 
     // ---- arms ----
     if (side){
-      // back arm hint
-      x.fillStyle = o.robe; x.fillRect(5, 9, 1, 3);
-      // front arm reaches forward, swings with the stride
-      x.fillStyle = o.robe2; x.fillRect(8, 9 + sw, 3, 2);
-      x.fillStyle = o.skin;  x.fillRect(11, 9 + sw, 1, 1);
-      if (kind === 'player'){ // staff held forward
-        x.fillStyle = '#8a5a3a'; x.fillRect(10, 8 + sw, 6, 1);
-        x.fillStyle = o.trim;    x.fillRect(15, 7 + sw, 1, 2);
+      // back arm hint along the body
+      x.fillStyle = shade(o.robe, .65); x.fillRect(10, 18, 2, 7);
+      // front arm reaches forward, swinging with the stride
+      x.fillStyle = o.robe2; x.fillRect(16, 18 + sw, 7, 4);
+      x.fillStyle = shade(o.robe2, .75); x.fillRect(16, 21 + sw, 7, 1);
+      x.fillStyle = o.skin;  x.fillRect(23, 19 + sw, 2, 2);
+      if (kind === 'player'){ // staff thrust forward
+        x.fillStyle = '#8a5a3a'; x.fillRect(21, 17 + sw, 11, 2);
+        x.fillStyle = '#6d4528'; x.fillRect(21, 18 + sw, 11, 1);
+        x.fillStyle = o.trim;    x.fillRect(30, 15 + sw, 2, 4);
+        x.fillStyle = '#cdb4ff'; x.fillRect(30, 16 + sw, 1, 1);
       }
     } else {
       // two sleeves swinging in opposite phase
       x.fillStyle = o.robe2;
-      x.fillRect(3, 8 + sw, 2, 4);
-      x.fillRect(11, 9 - sw, 2, 4);
+      x.fillRect(6, 16 + sw, 4, 8);
+      x.fillRect(22, 18 - sw, 4, 8);
+      x.fillStyle = shade(o.robe2, .75);
+      x.fillRect(6, 22 + sw, 4, 1); x.fillRect(22, 24 - sw, 4, 1);
       x.fillStyle = o.skin;
-      x.fillRect(3, 12 + sw, 2, 1);
-      x.fillRect(11, 13 - sw, 2, 1);
-      if (kind === 'player'){ // staff at the side (left hand when seen from behind)
-        const sxp = up ? 2 : 13;
-        x.fillStyle = '#8a5a3a'; x.fillRect(sxp, 4, 1, 10);
-        x.fillStyle = o.trim;    x.fillRect(sxp, 2, 1, 2);
-        x.fillStyle = '#cdb4ff'; x.fillRect(sxp, 1, 1, 1);
+      x.fillRect(7, 24 + sw, 3, 2);
+      x.fillRect(23, 26 - sw, 3, 2);
+      if (kind === 'player'){ // staff held at the side
+        const sxp = up ? 4 : 27;
+        x.fillStyle = '#8a5a3a'; x.fillRect(sxp, 9, 2, 20);
+        x.fillStyle = '#6d4528'; x.fillRect(sxp+1, 9, 1, 20);
+        x.fillStyle = o.trim;    x.fillRect(sxp-1, 5, 4, 4);
+        x.fillStyle = '#cdb4ff'; x.fillRect(sxp, 6, 2, 1);
       }
     }
 
-    // ---- head ----
+    // ---- head (rows 2-15) ----
     if (up){
       x.fillStyle = o.hood ? o.robe : (o.hair || '#3a2c1c');
-      x.fillRect(4,1,8,7);
-      x.fillStyle = o.hood ? o.robe2 : (o.hair || '#3a2c1c');
-      x.fillRect(5,2,6,5);
+      x.fillRect(9,3,14,13);
+      x.fillStyle = o.hood ? o.robe2 : shade(o.hair || '#3a2c1c', .8);
+      x.fillRect(11,5,10,9);
+      if (o.hood){ x.fillStyle = shade(o.robe, .7); x.fillRect(15,3,2,13); }
     } else {
-      x.fillStyle = o.skin; x.fillRect(5,2,6,6);
-      if (o.hood){ x.fillStyle = o.robe; x.fillRect(4,1,8,2); x.fillRect(4,1,1,7); x.fillRect(11,1,1,7); x.fillRect(5,3,1,1); x.fillRect(10,3,1,1); }
-      else { x.fillStyle = o.hair || '#3a2c1c'; x.fillRect(4,1,8,2); x.fillRect(4,2,1,3); x.fillRect(11,2,1,3); }
-      x.fillStyle = '#17131f';
-      if (side){ x.fillRect(9,4,1,2); }
-      else { x.fillRect(6,4,1,2); x.fillRect(9,4,1,2); }
+      // face
+      x.fillStyle = o.skin; x.fillRect(10,5,12,11);
+      x.fillStyle = shade(o.skin, .85); x.fillRect(10,13,12,3); // jaw shading
+      if (o.hood){
+        x.fillStyle = o.robe;
+        x.fillRect(8,2,16,4);                        // hood top
+        x.fillRect(8,2,2,14); x.fillRect(22,2,2,14); // hood sides
+        x.fillStyle = o.robe2; x.fillRect(9,3,14,2); // inner rim
+        x.fillStyle = shade(o.robe, .6);
+        x.fillRect(10,6,2,2); x.fillRect(20,6,2,2);  // rim shadow on brow
+      } else {
+        x.fillStyle = o.hair || '#3a2c1c';
+        x.fillRect(8,2,16,4); x.fillRect(8,4,2,7); x.fillRect(22,4,2,7);
+        x.fillStyle = shade(o.hair || '#3a2c1c', .75); x.fillRect(8,5,16,1);
+      }
+      // eyes (+brow shadow) and mouth
+      x.fillStyle = dark;
+      if (side){ x.fillRect(18,9,2,3); x.fillRect(15,13,4,1); }
+      else {
+        x.fillRect(12,9,2,3); x.fillRect(18,9,2,3);
+        x.fillStyle = shade(o.skin, .8); x.fillRect(12,8,2,1); x.fillRect(18,8,2,1);
+        x.fillStyle = shade(o.skin, .7); x.fillRect(14,13,4,1);
+      }
     }
     return c;
   }
+
   const actorCache = {};
   function actor(kind, dir, step){
     const k = `${kind}_${dir}_${step?1:0}`;
@@ -347,6 +415,13 @@ const SPR = (() => {
         x.fillStyle = '#3a3050'; x.fillRect(4,3,8,11);
         x.fillRect(2,4,3,5); x.fillRect(11,4,3,5);
         x.fillStyle = col; x.fillRect(4,3,8,2); x.fillRect(7,5,2,8);
+        break;
+      case 'cape':
+        x.fillStyle = '#3a3050'; x.fillRect(4,2,8,2);
+        x.fillStyle = col;
+        x.fillRect(3,4,10,7);
+        x.fillRect(3,11,3,3); x.fillRect(7,11,3,2); x.fillRect(11,11,2,3);
+        x.fillStyle = '#fff4'; x.fillRect(5,5,1,5);
         break;
       case 'pants':
         x.fillStyle = '#3a3050'; x.fillRect(4,3,8,4);

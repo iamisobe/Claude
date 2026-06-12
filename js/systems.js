@@ -143,7 +143,7 @@ const Systems = (() => {
       c.imageSmoothingEnabled = false;
       // silhouette of the (still unknown) catch
       const sil = document.createElement('canvas');
-      sil.width = sil.height = 16;
+      sil.width = sil.height = 32;
       const sc = sil.getContext('2d');
       sc.drawImage(SPR.creature(sp), 0, 0);
       sc.globalCompositeOperation = 'source-in';
@@ -771,7 +771,7 @@ const Systems = (() => {
           <div class="char-top">
             <div class="paperdoll">
               <div class="eq-col" id="eq-left"></div>
-              <canvas class="pc" width="16" height="16"></canvas>
+              <canvas class="pc" width="32" height="32"></canvas>
               <div class="eq-col" id="eq-right"></div>
             </div>
             <div class="char-stats">${statsHTML()}</div>
@@ -781,7 +781,7 @@ const Systems = (() => {
           <div class="gear-detail" id="gear-detail">${detailHTML(items[sel])}</div>
           <div class="panel-foot">${IS_TOUCH ? '☰: close' : 'X / Esc: close'}</div>`;
         p.querySelector('.pc').getContext('2d').drawImage(SPR.actor('player', 0, 0), 0, 0);
-        const LEFT = ['helm','chest','pants','boots','gloves'];
+        const LEFT = ['helm','cape','chest','pants','boots','gloves'];
         items.forEach((it, idx) => {
           const cell = document.createElement('div');
           cell.className = (it.eq ? 'eq-slot' : 'gcell') + (idx === sel ? ' sel' : '');
