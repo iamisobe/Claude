@@ -682,50 +682,147 @@ const Systems = (() => {
     Combat.spawnRivalPack({ kind:'woods', rank, name, gold: 80 + avg * 12 }, rank);
   }
 
-  // ---------- gear ----------
-  function gearHTML(g, equipped){
-    const affTxt = Object.entries(g.aff).map(([k,v]) => AFFIXES[k].n.replace('#', v)).join(' · ');
-    return `<b style="color:${RARITIES[g.rar].col}">${g.name}</b> <span class="tag">${g.slot}</span>${equipped ? ' <span class="tag" style="color:#6dd86d">WORN</span>' : ''}<br><span class="dim">${affTxt}</span>`;
+  // ---------- character sheet (MMO style) ----------
+  const SLOT_ORDER = ['staff','robe','charm'];
+  function salvageGold(g){ return 30 + g.lvl * 8 + g.rar * 60; }
+  function affixHTML(g, cls = 'aff'){
+    return Object.entries(g.aff).map(([k,v]) =>
+      `<div class="${cls}">${AFFIXES[k].n.replace('#', v)}</div>`).join('');
   }
-  async function gearMenu(){
-    for(;;){
-      const rows = [];
-      const eq = [];
-      for (const s of ['staff','robe','charm']){
-        const g = G.gear.equip[s];
-        rows.push(g ? { html: gearHTML(g, true) } : { html:`<span class="dim">— empty ${s} slot —</span>`, dim:true });
-        eq.push(g);
+  function gearMenu(){
+    return new Promise(res => {
+      const p = $('panel');
+      let sel = 0; // 0..2 = equipped slots, 3+ = bag
+      const list = () => [
+        ...SLOT_ORDER.map(s => ({ eq:true, slot:s, g:G.gear.equip[s] })),
+        ...G.gear.bag.map((g, i) => ({ eq:false, i, g })),
+      ];
+
+      function statsHTML(){
+        const ps = Combat.pstats();
+        const base = [
+          ['Life', `${Math.ceil(G.pc.hp)}/${ps.maxhp}`],
+          ['Soul', `${Math.floor(G.pc.soul)}/${ps.maxsoul}`],
+          ['Staff damage', Math.round(ps.melee)],
+          ['Hex bolt', Math.round(ps.bolt)],
+          ['Move speed', Math.round(ps.speed)],
+          ['Soul regen', ps.regen.toFixed(1) + '/s'],
+        ].map(([n,v]) => `<div class="strow"><span>${n}</span><b>${v}</b></div>`).join('');
+        const extra = [['minion','Minion damage'],['capture','Capture odds'],['gold','Gold found'],['xp','Grim XP']]
+          .filter(([k]) => gearAffix(k) > 0)
+          .map(([k,n]) => `<div class="strow bonus"><span>${n}</span><b>+${gearAffix(k)}%</b></div>`).join('');
+        return base + extra;
       }
-      const bag = G.gear.bag;
-      for (const g of bag) rows.push({ html: gearHTML(g, false) });
-      const i = await UI.panelList(`GEAR — ${bag.length}/60 in bag`, rows,
-        { footer:'Z on bag gear: equip/salvage · Z on worn gear: unequip · X: back' });
-      if (i < 0) return;
-      if (i < 3){
-        const slot = ['staff','robe','charm'][i];
-        const g = G.gear.equip[slot];
-        if (!g) continue;
-        if (bag.length >= 60){ UI.toast('Gear bag full.'); continue; }
-        G.gear.equip[slot] = null;
-        bag.push(g);
-        UI.toast(`Unequipped ${g.name}.`);
-        continue;
+      function detailHTML(it){
+        if (!it) return '<span class="dim">Nothing here.</span>';
+        if (!it.g) return `<span class="dim">Empty ${it.slot} slot — gear drops from enemies and chests, or forge ore at the shop.</span>`;
+        const g = it.g;
+        let html = `<b style="color:${RARITIES[g.rar].col}">${g.name}</b>
+          <span class="tag">${g.slot} · Lv.${g.lvl} · ${RARITIES[g.rar].n}</span>
+          ${it.eq ? '<span class="tag" style="color:#6dd86d">WORN</span>' : ''}
+          ${affixHTML(g)}`;
+        if (!it.eq){
+          const cur = G.gear.equip[g.slot];
+          html += `<div class="cmp dim">${cur
+            ? `Worn now: <b style="color:${RARITIES[cur.rar].col}">${cur.name}</b>${affixHTML(cur)}`
+            : 'Nothing worn in that slot.'}</div>`;
+        }
+        html += `<div class="gd-btns">` +
+          (it.eq && it.g ? `<button data-act="unequip">UNEQUIP</button>` : '') +
+          (!it.eq ? `<button data-act="equip">EQUIP</button>
+                     <button data-act="salvage">SALVAGE +${salvageGold(g)}⛁</button>` : '') +
+          `</div>`;
+        return html;
       }
-      const g = bag[i - 3];
-      const a = await UI.choice(['Equip', `Salvage (+${30 + g.lvl * 8 + g.rar * 60}⛁)`, 'Back']);
-      if (a === 0){
-        const old = G.gear.equip[g.slot];
-        G.gear.equip[g.slot] = g;
-        bag.splice(i - 3, 1);
-        if (old) bag.push(old);
-        UI.toast(`Equipped ${g.name}.`);
-        G.pc.hp = Math.min(G.pc.hp, Combat.pstats().maxhp);
-      } else if (a === 1){
-        G.gold += 30 + g.lvl * 8 + g.rar * 60;
-        bag.splice(i - 3, 1);
-        UI.toast(`Salvaged ${g.name}.`);
+
+      function act(action){
+        const items = list();
+        const it = items[sel];
+        if (!it || !it.g) return;
+        if (action === 'equip' && !it.eq){
+          const old = G.gear.equip[it.g.slot];
+          G.gear.equip[it.g.slot] = it.g;
+          G.gear.bag.splice(it.i, 1);
+          if (old) G.gear.bag.push(old);
+          UI.toast(`Equipped ${it.g.name}.`);
+          G.pc.hp = Math.min(G.pc.hp, Combat.pstats().maxhp);
+          sel = SLOT_ORDER.indexOf(it.g.slot);
+        } else if (action === 'salvage' && !it.eq){
+          G.gold += salvageGold(it.g);
+          G.gear.bag.splice(it.i, 1);
+          UI.toast(`Salvaged ${it.g.name}.`);
+          sel = Math.min(sel, list().length - 1);
+        } else if (action === 'unequip' && it.eq){
+          if (G.gear.bag.length >= 60) return UI.toast('Gear bag full.');
+          G.gear.equip[it.slot] = null;
+          G.gear.bag.push(it.g);
+          UI.toast(`Unequipped ${it.g.name}.`);
+        }
+        render();
       }
-    }
+
+      function render(){
+        const items = list();
+        sel = Math.max(0, Math.min(sel, items.length - 1));
+        p.innerHTML = `<h2>CHARACTER — Necromancy Lv.${skillLvl('necromancy')}</h2>
+          <div class="char-top">
+            <div class="paperdoll">
+              <canvas class="pc" width="16" height="16"></canvas>
+              <div class="eq-col" id="eq-col"></div>
+            </div>
+            <div class="char-stats">${statsHTML()}</div>
+          </div>
+          <div class="dim" style="font-size:11px">GEAR BAG (${G.gear.bag.length}/60) — ${IS_TOUCH ? 'tap an item to inspect' : 'hover or use arrows to inspect, Z to act'}</div>
+          <div class="gear-grid" id="gear-grid"></div>
+          <div class="gear-detail" id="gear-detail">${detailHTML(items[sel])}</div>
+          <div class="panel-foot">${IS_TOUCH ? '☰: close' : 'X / Esc: close'}</div>`;
+        p.querySelector('.pc').getContext('2d').drawImage(SPR.actor('player', 0, 0), 0, 0);
+        const eqCol = p.querySelector('#eq-col');
+        items.forEach((it, idx) => {
+          const cell = document.createElement('div');
+          cell.className = (it.eq ? 'eq-slot' : 'gcell') + (idx === sel ? ' sel' : '');
+          if (it.g){
+            const c = document.createElement('canvas');
+            c.width = 16; c.height = 16;
+            c.getContext('2d').drawImage(SPR.gearIcon(it.g.slot, it.g.rar), 0, 0);
+            c.style.filter = `drop-shadow(0 0 3px ${RARITIES[it.g.rar].col}66)`;
+            cell.appendChild(c);
+          }
+          if (it.eq){
+            cell.insertAdjacentHTML('beforeend', `<span class="sl-name">${it.slot.toUpperCase()}</span>`);
+            eqCol.appendChild(cell);
+          } else p.querySelector('#gear-grid').appendChild(cell);
+          // hover (desktop) and tap (mobile) both inspect
+          cell.addEventListener('mouseenter', () => { if (sel !== idx){ sel = idx; render(); } });
+          cell.addEventListener('click', () => { if (sel !== idx){ sel = idx; render(); } });
+        });
+        for (const b of p.querySelectorAll('.gd-btns button'))
+          b.onclick = () => act(b.dataset.act);
+      }
+
+      const cols = () => Math.max(1, Math.floor(($('panel').clientWidth - 28) / 58));
+      const h = async k => {
+        const n = list().length;
+        if (k === 'no'){ p.classList.add('hidden'); Input.pop(h); return res(); }
+        if (k === 'left'){ sel = (sel + n - 1) % n; render(); }
+        else if (k === 'right'){ sel = (sel + 1) % n; render(); }
+        else if (k === 'up'){ sel = sel >= 3 + cols() ? sel - cols() : Math.max(0, sel - 3); render(); }
+        else if (k === 'down'){ sel = sel < 3 ? 3 : Math.min(n - 1, sel + cols()); render(); }
+        else if (k === 'ok'){
+          const it = list()[sel];
+          if (!it || !it.g) return;
+          if (it.eq) act('unequip');
+          else {
+            const a = await UI.choice(['Equip', `Salvage (+${salvageGold(it.g)}⛁)`, 'Back']);
+            if (a === 0) act('equip');
+            else if (a === 1) act('salvage');
+          }
+        }
+      };
+      Input.push(h);
+      p.classList.remove('hidden');
+      render();
+    });
   }
 
   async function deedsMenu(){
@@ -887,7 +984,7 @@ const Systems = (() => {
   async function pauseMenu(){
     if (G.tut) G.tut.menuOpened = true;
     for(;;){
-      const base = ['Pack', 'Satchel', 'Gear', 'Skills', 'Deeds', 'Grimdex', 'Save'];
+      const base = ['Pack', 'Character', 'Satchel', 'Skills', 'Deeds', 'Grimdex', 'Save'];
       const opts = Tutorial.active() ? base.concat(['Skip tutorial', 'Close']) : base.concat(['Close']);
       const c = await UI.choice(opts);
       const pick = c < 0 ? 'Close' : opts[c];
@@ -945,7 +1042,7 @@ const Systems = (() => {
           else if (it.k === 'rod') UI.toast('Face water and press Z to fish.');
           else UI.toast(it.d || '...');
         }
-      } else if (pick === 'Gear') await gearMenu();
+      } else if (pick === 'Character') await gearMenu();
       else if (pick === 'Skills'){
         await UI.panelList('SKILLS', Object.entries(SKILLS).map(([k, s]) => {
           const lvl = skillLvl(k), xp = G.skills[k] || 0;

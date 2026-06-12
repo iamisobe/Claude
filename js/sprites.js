@@ -324,8 +324,33 @@ const SPR = (() => {
     return actorCache[k];
   }
 
+  // --- gear icons (slot glyph tinted by rarity) ---
+  function gearIcon(slot, rar){
+    const k = `gi_${slot}_${rar}`;
+    if (cache[k]) return cache[k];
+    const c = cv(16,16), x = c.getContext('2d');
+    const col = RARITIES[rar].col;
+    if (slot === 'staff'){
+      x.strokeStyle = '#8a5a3a'; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(4,13); x.lineTo(11,4); x.stroke();
+      x.fillStyle = col; x.fillRect(10,2,4,4);
+      x.fillStyle = '#fff8'; x.fillRect(11,3,1,1);
+    } else if (slot === 'robe'){
+      x.fillStyle = '#3a3050'; x.fillRect(4,3,8,11);
+      x.fillRect(2,4,3,5); x.fillRect(11,4,3,5);
+      x.fillStyle = col; x.fillRect(4,3,8,2); x.fillRect(7,5,2,8);
+    } else { // charm
+      x.strokeStyle = '#8a8268'; x.lineWidth = 1;
+      x.beginPath(); x.arc(8,6,4,Math.PI,0); x.stroke();
+      x.fillStyle = col; x.beginPath(); x.arc(8,10,4,0,7); x.fill();
+      x.fillStyle = '#fff8'; x.fillRect(7,9,1,1);
+    }
+    cache[k] = c;
+    return c;
+  }
+
   function init(){ buildTiles(); buildFurniture(); buildCrops(); }
   function get(name){ return T[name]; }
 
-  return { init, get, creature, actor, drawArt, cv };
+  return { init, get, creature, actor, drawArt, cv, gearIcon };
 })();

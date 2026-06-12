@@ -84,10 +84,10 @@ const Tutorial = (() => {
         'If it goes badly, use a GRAVE RUNE from your satchel to escape. The Gravedigger gives them to those who ask.'],
       check: () => (G.cata.maxFloor || 0) >= 2 },
 
-    { icon:'⚔', obj:`Equip a piece of gear from the GEAR menu (${K.menu} → Gear).`,
+    { icon:'⚔', obj:`Equip a piece of gear from your CHARACTER sheet (${K.menu} → Character).`,
       gift: () => { G.gear.bag.push(rollGear(3)); UI.toast('Morwen presses an old family heirloom into your hands.'); },
       intro:['The dead drop more than dust — staves, robes, charms, each with its own blessings.',
-        `I have given you a piece to start. Open ${K.menu} → GEAR, pick it, and EQUIP it.`,
+        `I have given you a piece to start. Open ${K.menu} → CHARACTER, inspect it, and EQUIP it.`,
         'Common is white, CURSED is blue, ELDRITCH is gold with three blessings. Salvage what you do not want.'],
       check: () => !!(G.gear.equip.staff || G.gear.equip.robe || G.gear.equip.charm) },
 
