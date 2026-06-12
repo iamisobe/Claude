@@ -5,7 +5,7 @@
 'use strict';
 
 const SFX = (() => {
-  let ctx = null, master = null, musicBus = null, musicTimer = null, droneGain = null;
+  let ctx = null, master = null, musicBus = null, musicTimer = null;
   let sndOn = true, musOn = true;
   try {
     sndOn = localStorage.getItem('gv_snd') !== '0';
@@ -97,37 +97,43 @@ const SFX = (() => {
     if (r) try { r(ctx.currentTime); } catch (e) {}
   }
 
-  // ---- generative ambience: a slow drone + sparse minor bells ----
+  // ---- generative music: a slow plucked lute in A minor ----
+  // No sustained tones — every voice is a short pluck that decays away,
+  // walking an Am→F→C→Em progression so it stays harmonic, never droning.
+  const PROG = [
+    { bass: 110.00, tones: [220.00, 261.63, 329.63, 440.00] },  // Am
+    { bass:  87.31, tones: [220.00, 261.63, 349.23, 440.00] },  // F
+    { bass: 130.81, tones: [196.00, 261.63, 329.63, 392.00] },  // C
+    { bass:  82.41, tones: [196.00, 246.94, 329.63, 392.00] },  // Em
+  ];
+  let mstep = 0;
+  function pluck(f, t, vol, dur){
+    const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    o.type = 'triangle';
+    o.frequency.value = f * (1 + (Math.random() - 0.5) * 0.004);  // human detune
+    lp.type = 'lowpass'; lp.frequency.value = 2200;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp).connect(g).connect(musicBus);
+    o.start(t); o.stop(t + dur + 0.1);
+  }
   function startMusic(){
     if (!ctx || musicTimer) return;
-    const d1 = ctx.createOscillator(), d2 = ctx.createOscillator();
-    droneGain = ctx.createGain();
-    d1.type = 'triangle'; d2.type = 'triangle';
-    d1.frequency.value = 55;        // A1
-    d2.frequency.value = 82.4;      // E2
-    droneGain.gain.value = 0.5;
-    const lfo = ctx.createOscillator(), lg = ctx.createGain();
-    lfo.frequency.value = 0.06; lg.gain.value = 0.16;
-    lfo.connect(lg).connect(droneGain.gain);
-    d1.connect(droneGain); d2.connect(droneGain);
-    droneGain.connect(musicBus);
-    d1.start(); d2.start(); lfo.start();
-    const scale = [220, 261.6, 293.7, 329.6, 392, 440];   // A minor pentatonic-ish
     musicTimer = setInterval(() => {
       if (!musOn || !sndOn || !ctx || ctx.state !== 'running') return;
       if (typeof document !== 'undefined' && document.hidden) return;
-      if (Math.random() < 0.6){
-        const f = scale[Math.floor(Math.random() * scale.length)] * (Math.random() < 0.3 ? 2 : 1);
-        const t = ctx.currentTime;
-        const o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.11, t + 0.03);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
-        o.connect(g).connect(musicBus);
-        o.start(t); o.stop(t + 2.8);
+      const t = ctx.currentTime;
+      const ch = PROG[Math.floor(mstep / 8) % PROG.length];
+      const beat = mstep % 8;
+      if (beat === 0) pluck(ch.bass, t, 0.30, 2.2);
+      if (beat === 4 && Math.random() < 0.7) pluck(ch.bass * 1.5, t, 0.16, 1.6);
+      if (Math.random() < (beat % 2 === 0 ? 0.6 : 0.25)){
+        const f = ch.tones[Math.floor(Math.random() * ch.tones.length)] * (Math.random() < 0.15 ? 2 : 1);
+        pluck(f, t, 0.13, 1.3);
       }
-    }, 2700);
+      mstep++;
+    }, 340);
   }
 
   function toggleSound(){
