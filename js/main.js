@@ -19,7 +19,7 @@ function freshGame(){
     arena: { rank: 1, wins: 0 },
     cata: { maxFloor: 0 },
     flags: { chests: {} },
-    stats: {}, quest: { i: 0 },
+    stats: {}, quest: { i: 0 }, tree: {},
     pos: { map: 'town', x: 17, y: 8 },
   };
 }
@@ -76,6 +76,7 @@ function continueGame(){
   G.houses = G.houses || {};
   G.stats = G.stats || {};
   G.quest = G.quest || { i: 0 };
+  G.tree = G.tree || {};
   if (G.manor.storageBuilt === undefined) G.manor.storageBuilt = true; // veterans keep their chest
   $('title').classList.add('hidden');
   World.enter(G.pos.map, G.pos.x, G.pos.y);

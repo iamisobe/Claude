@@ -735,6 +735,43 @@ const SKILL_REQ = {
 };
 
 
+
+// ---------- NECROMANCER TALENT TREE ----------
+// 1 point per Necromancy level. Tier 1 nodes need 3 points spent in the
+// branch, capstones need 7. Respec at the tree for gold.
+const TREE = {
+  dominion: { n:'Dominion', col:'#6dd86d', icon:'☠',
+    blurb:'Rule a greater, deadlier pack.', nodes:[
+    { id:'packcap', n:'Pack Tactician',  max:2, tier:0, d:r=>`+${r} pack size` },
+    { id:'minD',    n:'Dark Vigor',      max:5, tier:0, d:r=>`Minions deal +${10*r}% damage` },
+    { id:'minS',    n:'Swift Service',   max:3, tier:1, d:r=>`Minions attack ${8*r}% faster` },
+    { id:'minT',    n:'Grave Ward',      max:3, tier:1, d:r=>`Minions take ${7*r}% less damage` },
+    { id:'harvest', n:'Soul Harvest',    max:3, tier:1, d:r=>`Every kill restores ${2*r} of your life` },
+    { id:'legion',  n:'Risen Legion',    max:1, tier:2, d:()=>'Downed grims rise twice as fast, at half health' },
+  ]},
+  hexcraft: { n:'Hexcraft', col:'#9b6dff', icon:'✦',
+    blurb:'Sharper, stranger hexes.', nodes:[
+    { id:'boltD',   n:'Soul Lance',      max:5, tier:0, d:r=>`Hex bolts deal +${12*r}% damage` },
+    { id:'soulMax', n:'Deep Well',       max:3, tier:0, d:r=>`+${15*r} max Soul` },
+    { id:'boltC',   n:'Frugal Magic',    max:3, tier:1, d:r=>`Bolts cost ${r} less Soul` },
+    { id:'echo',    n:'Echoing Hex',     max:3, tier:1, d:r=>`${15*r}% chance a bolt echoes at another foe` },
+    { id:'nova',    n:'Hex Nova',        max:1, tier:2, d:()=>'Bolts burst on impact, splashing 60% damage nearby' },
+  ]},
+  knight: { n:'Grave Knight', col:'#e8c95d', icon:'⚔',
+    blurb:'Stand in the slaughter and endure.', nodes:[
+    { id:'melD',    n:'Heavy Arm',       max:5, tier:0, d:r=>`Staff strikes deal +${12*r}% damage` },
+    { id:'hpMax',   n:'Corpse Skin',     max:3, tier:0, d:r=>`+${20*r} max Life` },
+    { id:'sweep',   n:'Wide Sweep',      max:2, tier:1, d:r=>`Swing reach +${20*r}%` },
+    { id:'wind',    n:'Second Wind',     max:3, tier:1, d:r=>`Regeneration +${20*r}%` },
+    { id:'reaper',  n:"Reaper's Momentum", max:1, tier:2, d:()=>'Kills grant +30% speed and damage for 4s' },
+  ]},
+};
+const TREE_TIER_REQ = [0, 3, 7];
+function treeRank(id){ return (G.tree && G.tree[id]) || 0; }
+function treeSpent(branch){
+  return TREE[branch].nodes.reduce((s, nd) => s + treeRank(nd.id), 0);
+}
+
 // ---------- THE LEDGER: a 22-step progression chain + endless bounty ----------
 // cur(G) -> current count · req -> target · reward claimed at the notice board
 const QUESTS = [

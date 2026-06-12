@@ -13,16 +13,17 @@ const Combat = (() => {
   // ---------- player derived stats ----------
   function pstats(){
     const nl = Systems.skillLvl('necromancy');
+    const fr = (G.pc && G.pc.frenzy > 0) ? 1.3 : 1;       // Reaper's Momentum
     return {
-      maxhp:   Math.floor(50 + nl*6 + gearAffix('hp')),
-      maxsoul: Math.floor(25 + nl*2 + gearAffix('soul')),
-      melee:   (7 + nl*1.6) * (1 + gearAffix('dmg')/100),
-      bolt:    (10 + nl*2.2) * (1 + gearAffix('bolt')/100),
-      speed:   165 * (1 + gearAffix('speed')/100),
-      regen:   (2.2 + nl*0.08) * (1 + gearAffix('regen')/100),
+      maxhp:   Math.floor(50 + nl*6 + gearAffix('hp') + 20*treeRank('hpMax')),
+      maxsoul: Math.floor(25 + nl*2 + gearAffix('soul') + 15*treeRank('soulMax')),
+      melee:   (7 + nl*1.6) * (1 + gearAffix('dmg')/100) * (1 + 0.12*treeRank('melD')) * fr,
+      bolt:    (10 + nl*2.2) * (1 + gearAffix('bolt')/100) * (1 + 0.12*treeRank('boltD')),
+      speed:   165 * (1 + gearAffix('speed')/100) * (fr > 1 ? 1.25 : 1),
+      regen:   (2.2 + nl*0.08) * (1 + gearAffix('regen')/100) * (1 + 0.2*treeRank('wind')),
     };
   }
-  function minionCap(){ return Math.min(9, 3 + Math.floor(Systems.skillLvl('necromancy') / 5)); }
+  function minionCap(){ return Math.min(11, 3 + Math.floor(Systems.skillLvl('necromancy') / 5) + treeRank('packcap')); }
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -107,7 +108,7 @@ const Combat = (() => {
   function minionDmg(g){
     const st = statsFor(g.sp, g.lvl);
     const base = (Math.max(st.atk, st.spc) * 0.45 + g.lvl * 0.9);
-    return base * (1 + gearAffix('minion')/100);
+    return base * (1 + gearAffix('minion')/100) * (1 + 0.10*treeRank('minD'));
   }
 
   // ---------- helpers ----------
@@ -178,10 +179,11 @@ const Combat = (() => {
     if (G.pc.hp <= 0){ dying = true; G.pc.hp = 0; Systems.afterLoss().then(() => dying = false); }
   }
   function hurtMinion(m, dmg){
+    dmg *= 1 - 0.07 * treeRank('minT');   // Grave Ward
     m.g.hp -= Math.max(1, Math.round(dmg));
     floater(m.x, m.y - 24, String(Math.max(1, Math.round(dmg))), '#e8825d');
     if (m.g.hp <= 0){
-      m.g.hp = 0; m.g.downT = 15;
+      m.g.hp = 0; m.g.downT = treeRank('legion') ? 7.5 : 15;
       poof(m.x, m.y, '#9b6dff');
       UI.toast(`${m.g.nick} was knocked down!`);
       minions = minions.filter(x => x !== m);
@@ -192,6 +194,10 @@ const Combat = (() => {
     ents = ents.filter(x => x !== e);
     poof(e.x, e.y, '#5a4a7a');
     G.kills = (G.kills || 0) + 1;
+    // talents: Soul Harvest + Reaper's Momentum
+    const hv = treeRank('harvest');
+    if (hv) G.pc.hp = Math.min(pstats().maxhp, G.pc.hp + 2*hv);
+    if (treeRank('reaper')) G.pc.frenzy = 4;
     // xp
     const baseXp = Math.floor(DEX[e.sp].xp * e.lvl / 12) + 2;
     let mult = 1 + gearAffix('xp')/100 + (G.manor.restored.study ? 0.15 : 0);
@@ -263,11 +269,12 @@ const Combat = (() => {
     G.pc.atkCd = 0.38;
     G.pc.swing = 0.18;
     const [fx, fy] = World.faceVec();
+    const reach = 1 + 0.2 * treeRank('sweep');   // Wide Sweep
     let hit = 0;
     for (const e of enemies()){
       const dx = e.x - World.ppx, dy = e.y - World.ppy;
       const d = Math.hypot(dx, dy);
-      if (d > (e.boss ? 78 : 58)) continue;
+      if (d > (e.boss ? 78 : 58) * reach) continue;
       const dot = (dx*fx + dy*fy) / (d || 1);
       if (dot < 0.25 && d > 26) continue;
       hurtEnemy(e, ps.melee, null, { x:World.ppx, y:World.ppy });
@@ -277,9 +284,10 @@ const Combat = (() => {
   }
   function playerBolt(){
     if (G.pc.boltCd > 0) return;
-    if (G.pc.soul < 6){ UI.toast('Not enough Soul.'); return; }
+    const cost = Math.max(3, 6 - treeRank('boltC'));   // Frugal Magic
+    if (G.pc.soul < cost){ UI.toast('Not enough Soul.'); return; }
     const ps = pstats();
-    G.pc.soul -= 6;
+    G.pc.soul -= cost;
     G.pc.boltCd = 0.55;
     G.pc.cast = 0.18;
     const t = nearestEnemy(World.ppx, World.ppy, 430);
@@ -287,6 +295,11 @@ const Combat = (() => {
     if (t){ tx = t.x; ty = t.y; }
     else { const [fx, fy] = World.faceVec(); tx = World.ppx + fx*200; ty = World.ppy + fy*200; }
     shoot(World.ppx, World.ppy - 8, tx, ty, ps.bolt, true, '#9b6dff', 300);
+    // Echoing Hex: a second bolt leaps to another foe
+    if (Math.random() < 0.15 * treeRank('echo')){
+      const t2 = nearestEnemy(World.ppx, World.ppy, 430, e => e !== t);
+      if (t2) setTimeout(() => shoot(World.ppx, World.ppy - 8, t2.x, t2.y, ps.bolt, true, '#cdb4ff', 300), 120);
+    }
   }
 
   function bestJarFor(e){
@@ -343,6 +356,7 @@ const Combat = (() => {
     G.pc.inv = Math.max(0, (G.pc.inv || 0) - dt);
     G.pc.swing = Math.max(0, (G.pc.swing || 0) - dt);
     G.pc.cast = Math.max(0, (G.pc.cast || 0) - dt);
+    G.pc.frenzy = Math.max(0, (G.pc.frenzy || 0) - dt);
     G.pc.soul = Math.min(ps.maxsoul, G.pc.soul + ps.regen * dt);
 
     // regen when no pursuer is close — escaping danger lets you breathe
@@ -361,7 +375,7 @@ const Combat = (() => {
         g.downT -= dt;
         if (g.downT <= 0){
           delete g.downT;
-          g.hp = Math.floor(statsFor(g.sp, g.lvl).maxhp * 0.25);
+          g.hp = Math.floor(statsFor(g.sp, g.lvl).maxhp * (treeRank('legion') ? 0.5 : 0.25));
           UI.toast(`${g.nick} staggers back up.`);
           syncMinions();
         }
@@ -468,7 +482,7 @@ const Combat = (() => {
       if (d > want + 8) seek(m, tgt.x, tgt.y, spd, dt);
       else if (d < want - 24) seek(m, m.x - (tgt.x-m.x)/d*100, m.y - (tgt.y-m.y)/d*100, spd, dt);
       if (m.cd <= 0 && d < (ranged ? 280 : want + 14)){
-        m.cd = ranged ? 1.4 : 1.0;
+        m.cd = (ranged ? 1.4 : 1.0) * (1 - 0.08*treeRank('minS'));
         if (ranged) shoot(m.x, m.y, tgt.x, tgt.y, minionDmg(m.g), true, TYPES[DEX[m.g.sp].ty[0]].col, 240, );
         else hurtEnemy(tgt, minionDmg(m.g), DEX[m.g.sp].ty[0], { x:m.x, y:m.y });
       }
@@ -488,7 +502,17 @@ const Combat = (() => {
     if (p.ttl <= 0 || World.shotBlockedPx(p.x, p.y)){ ents = ents.filter(x => x !== p); return; }
     if (p.ally){
       const e = nearestEnemy(p.x, p.y, 22);
-      if (e){ hurtEnemy(e, p.dmg, 'SPIRIT'); ents = ents.filter(x => x !== p); }
+      if (e){
+        hurtEnemy(e, p.dmg, 'SPIRIT');
+        if (treeRank('nova')){ // burst: splash nearby foes
+          poof(p.x, p.y, '#9b6dff');
+          for (const e2 of enemies()){
+            if (e2 !== e && Math.hypot(e2.x - p.x, e2.y - p.y) < 64)
+              hurtEnemy(e2, p.dmg * 0.6, 'SPIRIT');
+          }
+        }
+        ents = ents.filter(x => x !== p);
+      }
     } else {
       if (Math.hypot(p.x-World.ppx, p.y-World.ppy+6) < 20){ hurtPlayer(p.dmg); ents = ents.filter(x => x !== p); return; }
       for (const m of minions){

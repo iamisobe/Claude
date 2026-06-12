@@ -13,7 +13,7 @@ const Systems = (() => {
     const old = skillLvl(s);
     G.skills[s] = (G.skills[s] || 0) + Math.floor(xp);
     const nw = skillLvl(s);
-    if (nw > old) UI.toast(`${SKILLS[s].icon} ${SKILLS[s].n} rose to Lv.${nw}!`);
+    if (nw > old) UI.toast(`${SKILLS[s].icon} ${SKILLS[s].n} rose to Lv.${nw}!${s === 'necromancy' ? ' (+1 talent point)' : ''}`);
   }
 
   function healAll(){
@@ -1036,6 +1036,100 @@ const Systems = (() => {
     return UI.say(`"Deepest you've gone is floor ${G.cata.maxFloor || 0}.${cp >= 5 ? ` The hole remembers your checkpoints — you can drop straight to B${cp}.` : ''} The dark remembers too."`, 'Gravedigger');
   }
 
+  // ---------- the talent tree ----------
+  function treePointsTotal(){ return Math.max(0, skillLvl('necromancy') - 1); }
+  function treePointsSpent(){
+    return Object.keys(TREE).reduce((s, b) => s + treeSpent(b), 0);
+  }
+  function treePointsFree(){ return treePointsTotal() - treePointsSpent(); }
+
+  function treeMenu(){
+    return new Promise(res => {
+      const p = $('panel');
+      const branches = Object.keys(TREE);
+      let selB = 0, selN = 0;
+      const node = () => TREE[branches[selB]].nodes[selN];
+      const locked = (b, nd) => treeSpent(b) < TREE_TIER_REQ[nd.tier];
+
+      function learn(){
+        const b = branches[selB], nd = node();
+        const r = treeRank(nd.id);
+        if (treePointsFree() < 1) return UI.toast('No talent points — Necromancy levels grant them.');
+        if (r >= nd.max) return UI.toast('Already mastered.');
+        if (locked(b, nd)) return UI.toast(`Spend ${TREE_TIER_REQ[nd.tier]} points in ${TREE[b].n} first.`);
+        G.tree[nd.id] = r + 1;
+        UI.toast(`${nd.n} → rank ${r + 1}`);
+        G.pc.hp = Math.min(G.pc.hp, Combat.pstats().maxhp);
+        save();
+        render();
+      }
+      async function respec(){
+        const spent = treePointsSpent();
+        if (!spent) return UI.toast('Nothing to unlearn.');
+        const cost = spent * 100;
+        if (G.gold < cost) return UI.toast(`Respec costs ${cost}⛁.`);
+        if (!(await UI.confirm(`Unlearn all ${spent} points for ${cost}⛁?`))) return;
+        G.gold -= cost;
+        G.tree = {};
+        save();
+        render();
+      }
+
+      function render(){
+        p.innerHTML = `<h2>TALENTS — ${treePointsFree()} point${treePointsFree()===1?'':'s'} free
+          <span class="dim" style="font-size:12px">(1 per Necromancy level · spent ${treePointsSpent()}/${treePointsTotal()})</span></h2>
+          <div class="tree-cols">${branches.map((b, bi) => {
+            const B = TREE[b];
+            return `<div class="tree-col" style="border-color:${B.col}">
+              <div class="tree-head" style="color:${B.col}">${B.icon} ${B.n}
+                <span class="dim">(${treeSpent(b)} pts)</span></div>
+              ${B.nodes.map((nd, ni) => {
+                const r = treeRank(nd.id);
+                const lk = locked(b, nd);
+                const sel = bi === selB && ni === selN;
+                return `<div class="tnode${sel ? ' sel' : ''}${lk ? ' lk' : ''}" data-b="${bi}" data-n="${ni}">
+                  <span>${nd.n}</span>
+                  <span class="pips">${'●'.repeat(r)}${'○'.repeat(nd.max - r)}</span>
+                </div>`;
+              }).join('')}
+            </div>`;
+          }).join('')}</div>
+          <div class="gear-detail" id="tree-detail"></div>
+          <div class="panel-foot">${IS_TOUCH ? 'tap a talent, then LEARN' : 'arrows: move · Z: learn · X: close'} · <button id="tree-respec" style="font-size:11px;padding:3px 10px">RESPEC ${treePointsSpent()*100}⛁</button></div>`;
+        // detail
+        const nd = node(), b = branches[selB];
+        const r = treeRank(nd.id);
+        const lk = locked(b, nd);
+        $('tree-detail').innerHTML = `<b style="color:${TREE[b].col}">${nd.n}</b>
+          <span class="tag">rank ${r}/${nd.max}${nd.tier ? ` · needs ${TREE_TIER_REQ[nd.tier]} pts in ${TREE[b].n}` : ''}</span><br>
+          ${r > 0 ? `<span class="aff">Now: ${nd.d(r)}</span><br>` : ''}
+          ${r < nd.max ? `<span class="dim">Next: ${nd.d(r + 1)}</span>` : '<span class="dim">Mastered.</span>'}
+          <div class="gd-btns">${r < nd.max && !lk ? '<button data-act="learn">LEARN (1 pt)</button>' : ''}</div>`;
+        for (const el of p.querySelectorAll('.tnode')){
+          const pick = () => { selB = +el.dataset.b; selN = +el.dataset.n; render(); };
+          el.addEventListener('mouseenter', () => { if (selB !== +el.dataset.b || selN !== +el.dataset.n) pick(); });
+          el.addEventListener('click', pick);
+        }
+        const lb = p.querySelector('[data-act="learn"]');
+        if (lb) lb.onclick = learn;
+        $('tree-respec').onclick = respec;
+      }
+
+      const h = k => {
+        if (k === 'no'){ p.classList.add('hidden'); Input.pop(h); return res(); }
+        const B = TREE[branches[selB]];
+        if (k === 'left'){ selB = (selB + 2) % 3; selN = Math.min(selN, TREE[branches[selB]].nodes.length - 1); render(); }
+        else if (k === 'right'){ selB = (selB + 1) % 3; selN = Math.min(selN, TREE[branches[selB]].nodes.length - 1); render(); }
+        else if (k === 'up'){ selN = (selN + B.nodes.length - 1) % B.nodes.length; render(); }
+        else if (k === 'down'){ selN = (selN + 1) % B.nodes.length; render(); }
+        else if (k === 'ok') learn();
+      };
+      Input.push(h);
+      p.classList.remove('hidden');
+      render();
+    });
+  }
+
   // ---------- the notice board (quest chain + endless bounty) ----------
   function currentQuest(){
     const i = G.quest.i || 0;
@@ -1076,7 +1170,7 @@ const Systems = (() => {
   async function pauseMenu(){
     if (G.tut) G.tut.menuOpened = true;
     for(;;){
-      const base = ['Pack', 'Character', 'Satchel', 'Ledger', 'Skills', 'Deeds', 'Grimdex', 'Save'];
+      const base = ['Pack', 'Character', 'Talents', 'Satchel', 'Ledger', 'Skills', 'Deeds', 'Grimdex', 'Save'];
       const opts = Tutorial.active() ? base.concat(['Skip tutorial', 'Close']) : base.concat(['Close']);
       const c = await UI.choice(opts);
       const pick = c < 0 ? 'Close' : opts[c];
@@ -1136,6 +1230,7 @@ const Systems = (() => {
         }
       } else if (pick === 'Character') await gearMenu();
       else if (pick === 'Ledger') await questBoard();
+      else if (pick === 'Talents') await treeMenu();
       else if (pick === 'Skills'){
         await UI.panelList('SKILLS', Object.entries(SKILLS).map(([k, s]) => {
           const lvl = skillLvl(k), xp = G.skills[k] || 0;
@@ -1178,6 +1273,6 @@ const Systems = (() => {
   return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish, fishingFx, gather,
     restore, placeFurniture, sleep, storage, cauldron, altar, manorDone,
     enterCata, descend, ascend, chest, arena, arenaExit, rivalDefeated, woodsDuel,
-    plotMenu, deedsMenu, gearMenu, questBoard,
+    plotMenu, deedsMenu, gearMenu, questBoard, treeMenu,
     shop, witch, fisherTalk, diggerTalk, pauseMenu, save, load };
 })();

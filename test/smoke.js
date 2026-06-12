@@ -242,6 +242,19 @@ vm.runInContext(`(${function tests(check){
       && Object.keys(b.reward.items).every(k => ITEMS[k]));
   }
 
+  // ---- talent tree data ----
+  {
+    const ids = new Set();
+    for (const [b, B] of Object.entries(TREE)){
+      for (const nd of B.nodes){
+        check(`talent ${nd.id}: unique id`, !ids.has(nd.id));
+        ids.add(nd.id);
+        check(`talent ${nd.id}: desc renders`, typeof nd.d(1) === 'string' && nd.d(1).length > 0);
+        check(`talent ${nd.id}: sane`, nd.max >= 1 && nd.tier >= 0 && nd.tier < TREE_TIER_REQ.length);
+      }
+    }
+  }
+
   // ---- mechanics math ----
   for (const k of Object.keys(DEX)){
     const g5 = makeGrim(k, 5), g40 = makeGrim(k, 40);
