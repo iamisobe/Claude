@@ -555,7 +555,9 @@ const World = (() => {
     const bobY = moving ? Math.sin(nowT/130) * 1.6 : Math.sin(nowT/600) * 1.0;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(px, py + 16, 15, 5, 0, 0, 7); ctx.fill();
-    ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0, G.pc && G.pc.swing > 0),
+    const fishing = typeof Systems !== 'undefined' && Systems.fishingFx && Systems.fishingFx();
+    const pmode = fishing ? 'rod' : (G.pc && G.pc.swing > 0 ? 'bare' : null);
+    ctx.drawImage(SPR.actor('player', W.dir, moving ? W.stepFrame : 0, pmode),
       Math.round(px - 32), Math.round(py - 44 + bobY), 64, 64);
     if (G.pc && G.pc.swing > 0){
       // staff sweeps through the strike arc
@@ -637,11 +639,13 @@ const World = (() => {
         ctx.fillText('!', bx - 5, by - 26 + Math.sin(now / 80) * 3);
       }
     }
-    // line from rod to bobber
+    // line from the ROD TIP to the bobber
+    const [fvx2, fvy2] = faceVec();
+    const rx = px + fvx2 * 26, ry = py - 24 + (fvy2 > 0 ? 26 : fvy2 < 0 ? -8 : 0);
     ctx.strokeStyle = 'rgba(232,224,208,0.45)';
     ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.quadraticCurveTo((px + bx) / 2, Math.min(py, by) - 18, bx, by - 4);
+    ctx.moveTo(rx, ry);
+    ctx.quadraticCurveTo((rx + bx) / 2, Math.min(ry, by) - 16, bx, by - 4);
     ctx.stroke();
     // the bobber itself
     ctx.fillStyle = '#e8442e';

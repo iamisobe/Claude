@@ -326,10 +326,12 @@ const SPR = (() => {
     digger: { robe:'#46405a', robe2:'#56506a', skin:'#d8c9b8', hood:true,  trim:'#8a8268' },
     rival:  { robe:'#17131f', robe2:'#241e30', skin:'#cdc4b8', hood:true,  trim:'#e8442e' },
   };
-  function actorCanvas(kind, dir, step, bare, eq){
+  function actorCanvas(kind, dir, step, mode, eq){
     // 64×64 detailed body with VISIBLE EQUIPMENT (paperdoll layers)
+    // mode: 'bare' (mid-swing, hands empty) · 'rod' (fishing) · falsy (weapons)
     // eq: {helm,chest,pants,boots,gloves,cape,amulet,w1,w2} -> rarity|null
     eq = eq || {};
+    const bare = !!mode;
     const o = OUTFITS[kind] || OUTFITS.rival;
     const c = cv(64,64), x = c.getContext('2d');
     const flip = dir === 2;
@@ -532,6 +534,28 @@ const SPR = (() => {
       x.fillStyle = rc(eq.amulet); x.fillRect(30, 29, 4, 4);
       x.fillStyle = lite(rc(eq.amulet)); x.fillRect(31, 30, 1, 1);
     }
+
+    // ===== FISHING ROD (weapons stowed) =====
+    if (mode === 'rod' && kind === 'player'){
+      x.fillStyle = '#8a5a3a';
+      if (side){
+        // rod angles up and out over the water
+        for (let i = 0; i < 7; i++) x.fillRect(46 + i*2, 30 - i*3, 3, 3);
+        x.fillStyle = '#6d4528'; x.fillRect(46, 28, 3, 6);   // grip
+        x.fillStyle = '#d8d0b8'; x.fillRect(47, 33, 3, 3);   // reel
+        x.fillStyle = o.skin;    x.fillRect(45, 30, 4, 4);   // hand on grip
+      } else if (up){
+        for (let i = 0; i < 6; i++) x.fillRect(10 - i, 26 - i*3, 3, 4);
+        x.fillStyle = '#d8d0b8'; x.fillRect(10, 28, 3, 3);
+        x.fillStyle = o.skin;    x.fillRect(8, 25, 4, 4);
+      } else {
+        // facing the viewer: rod juts down-right toward the water
+        for (let i = 0; i < 6; i++) x.fillRect(50 + i*2, 44 + i*3, 3, 3);
+        x.fillStyle = '#6d4528'; x.fillRect(49, 42, 3, 6);
+        x.fillStyle = '#d8d0b8'; x.fillRect(52, 47, 3, 3);
+        x.fillStyle = o.skin;    x.fillRect(48, 45, 4, 4);
+      }
+    }
     return c;
   }
 
@@ -544,11 +568,11 @@ const SPR = (() => {
       gloves:r(e.gloves), cape:r(e.cape), amulet:r(e.amulet),
       w1:r(e.weapon1), w2:r(e.weapon2) };
   }
-  function actor(kind, dir, step, bare){
+  function actor(kind, dir, step, mode){
     const eq = kind === 'player' ? playerEq() : null;
     const sig = eq ? Object.values(eq).map(v => v == null ? '-' : v).join('') : '';
-    const k = `${kind}_${dir}_${step?1:0}_${bare?1:0}_${sig}`;
-    if (!actorCache[k]) actorCache[k] = actorCanvas(kind, dir, step, bare, eq);
+    const k = `${kind}_${dir}_${step?1:0}_${mode||0}_${sig}`;
+    if (!actorCache[k]) actorCache[k] = actorCanvas(kind, dir, step, mode, eq);
     return actorCache[k];
   }
 
