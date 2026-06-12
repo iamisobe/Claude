@@ -65,7 +65,7 @@ const SPR = (() => {
     tile('water', x => { fill(x,'#1f3a5c'); x.fillStyle='#2e4a78';
       x.fillRect(1,3,5,1); x.fillRect(9,7,5,1); x.fillRect(3,12,5,1);
       x.fillStyle='#16294a'; x.fillRect(8,2,4,1); x.fillRect(2,8,4,1); x.fillRect(10,13,4,1); });
-    tile('tree', x => { fill(x,'#2e4a2e');
+    tile('tree', x => { x.clearRect(0,0,16,16);
       x.fillStyle='#16241a'; x.fillRect(2,0,12,11);
       x.fillStyle='#1f3324'; x.fillRect(3,1,10,9); x.fillRect(1,3,14,6);
       x.fillStyle='#2a4530'; x.fillRect(4,2,4,3); x.fillRect(9,4,4,3);
@@ -149,6 +149,34 @@ const SPR = (() => {
     tile('hole', x => { fill(x,'#2a3a4a'); x.fillStyle='#06040a'; x.fillRect(2,2,12,12);
       x.fillStyle='#16121f'; x.fillRect(2,2,12,3);
       x.fillStyle='#56506a'; x.fillRect(1,1,14,1); x.fillRect(1,14,14,1); x.fillRect(1,1,1,14); x.fillRect(14,1,1,14); });
+    // ---- zone terrains ----
+    tile('marsh', x => { fill(x,'#2a3a30'); speck(x,'#36493c',12,20); speck(x,'#1e2c24',8,21);
+      x.fillStyle='#24343c'; x.fillRect(2,11,4,2); x.fillRect(10,4,4,2); });
+    tile('rockg', x => { fill(x,'#46424c'); speck(x,'#534e58',12,22); speck(x,'#3a3640',10,23); });
+    tile('dgrass', x => { fill(x,'#22302a'); speck(x,'#2c3e34',12,24); speck(x,'#182420',8,25);
+      x.fillStyle='#9b6dff'; x.fillRect(12,12,1,1); });
+    tile('ashg', x => { fill(x,'#3c3434'); speck(x,'#4a403c',12,26); speck(x,'#2e2828',8,27);
+      x.fillStyle='#e8825d'; x.fillRect(4,12,1,1); });
+    tile('snow', x => { fill(x,'#aeb6c6'); speck(x,'#c2cad8',12,28); speck(x,'#969eb2',10,29); });
+    // ---- harvest nodes ----
+    tile('ntree', x => { x.clearRect(0,0,16,16);
+      x.fillStyle='#241c10'; x.fillRect(6,8,4,8); x.fillStyle='#3a2c1c'; x.fillRect(7,8,2,8);
+      x.fillStyle='#1f3324'; x.fillRect(2,1,12,8); x.fillStyle='#2a4530'; x.fillRect(3,2,10,6);
+      x.fillStyle='#e8c95d'; x.fillRect(4,4,2,2); x.fillRect(10,3,2,2); });
+    tile('nrock', x => { x.clearRect(0,0,16,16);
+      x.fillStyle='#6a6a7a'; x.fillRect(2,5,12,9); x.fillRect(4,3,8,3);
+      x.fillStyle='#8a8a9a'; x.fillRect(4,5,4,3); x.fillStyle='#52525e'; x.fillRect(9,8,4,4); });
+    for (const [name, vein, glow] of [['nore_ironore','#b87a4a','#d89a6a'],
+        ['nore_silverore','#cdd4e8','#f0f4ff'], ['nore_moonore','#9b6dff','#cdb4ff']]){
+      tile(name, x => { x.clearRect(0,0,16,16);
+        x.fillStyle='#56525e'; x.fillRect(2,4,12,10); x.fillRect(4,2,8,3);
+        x.fillStyle=vein; x.fillRect(4,6,3,2); x.fillRect(9,9,3,2); x.fillRect(6,11,2,2);
+        x.fillStyle=glow; x.fillRect(5,6,1,1); x.fillRect(10,9,1,1); });
+    }
+    tile('nwisp', x => { x.clearRect(0,0,16,16);
+      x.fillStyle='#3a4a5a'; x.fillRect(4,6,8,8);
+      x.fillStyle='#8af0e8'; x.fillRect(6,3,4,5); x.fillRect(7,1,2,2);
+      x.fillStyle='#d0fff8'; x.fillRect(7,4,2,2); });
     // the player's staff, horizontal — rotated for the swing animation
     tile('fx_staff', x => { x.clearRect(0,0,16,16);
       x.fillStyle='#8a5a3a'; x.fillRect(0,7,13,2);

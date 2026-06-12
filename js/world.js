@@ -13,8 +13,11 @@ const TILE_SPR = {
   's':'soil','B':'bwall','r':'roof','D':'door','F':'floor','W':'iwall','R':'rubble',
   'u':'stairsU','d':'stairsD','C':'chest','b':'bed','k':'cauldron','x':'box','A':'altar',
   'i':'sign','l':'flower','m':'dirt','h':'hole','a':'arena','E':'cfloor','X':'cwall',
+  'Y':'ntree','O':'nrock','Q':'nore_ironore','V':'nwisp',
 };
-const SOLID = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s']);
+const SOLID = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s','Y','O','Q','V']);
+// chars drawn as overlays on the zone's ground tile
+const OVERLAY = new Set(['#','Y','O','Q','V']);
 
 // ---------- static maps ----------
 const TOWN_ROWS = [
@@ -100,7 +103,74 @@ function genWoods(){
     .forEach(([x,y]) => set(x,y,'#'));
   rect(23,16,5,4,'w');
   set(27,2,'C'); set(2,21,'l'); set(17,8,'l'); rect(7,11,3,2,'m');
-  return rows;
+  // harvest nodes + the east gate onward to Gravefen
+  [[4,8,'Y'],[10,16,'Y'],[19,9,'Y'],[24,5,'Y'],[8,21,'Y'],[5,12,'O'],[22,12,'O']]
+    .forEach(([x,y,c2]) => set(x,y,c2));
+  set(29,12,'p'); set(28,12,'g'); set(27,12,'g');
+  return { rows, gates: { next:[29,12] } };
+}
+
+// procedural zone: ground field, solid scatter, cursed patches, nodes,
+// gates on the left (back) and right (onward) edges of row 13
+function genZone(id){
+  const Z = ZONES[id];
+  const w = 34, h = 26, mid = 13;
+  const rows = [];
+  for (let y = 0; y < h; y++){
+    let r = '';
+    for (let x = 0; x < w; x++) r += (x===0||y===0||x===w-1||y===h-1) ? '#' : 'g';
+    rows.push(r);
+  }
+  const set = (x,y,c) => { rows[y] = rows[y].slice(0,x) + c + rows[y].slice(x+1); };
+  const get = (x,y) => rows[y] && rows[y][x];
+  const rect = (x,y,rw,rh,c) => { for (let j=y;j<y+rh;j++) for (let i=x;i<x+rw;i++) if (get(i,j)) set(i,j,c); };
+  // keep the crossing road clear
+  const clear = (x,y) => get(x,y) === 'g' && !(y >= mid-1 && y <= mid+1 && true);
+  // solid scatter
+  for (let i = 0; i < 26; i++){
+    const x = 2 + rnd(w-4), y = 2 + rnd(h-4);
+    if (clear(x,y)) set(x,y,'#');
+  }
+  // cursed patches (encounter flavor)
+  for (let i = 0; i < 5; i++){
+    const x = 2 + rnd(w-10), y = 2 + rnd(h-10);
+    for (let j=0;j<4+rnd(4);j++) for (let k2=0;k2<3+rnd(3);k2++)
+      if (get(x+j,y+k2) === 'g') set(x+j,y+k2,'c');
+  }
+  // water pool (fishable)
+  if (Z.water){
+    const wx = 4 + rnd(w-14), wy = rnd(2) ? 3 + rnd(6) : h - 9 + rnd(3);
+    rect(wx, wy, 5, 3, 'w');
+  }
+  // harvest nodes
+  for (const [c2, n] of Object.entries(Z.nodes || {})){
+    let placed = 0, guard = 0;
+    while (placed < n && guard++ < 200){
+      const x = 2 + rnd(w-4), y = 2 + rnd(h-4);
+      if (get(x,y) === 'g' && Math.abs(y - mid) > 1){ set(x,y,c2); placed++; }
+    }
+  }
+  // one chest
+  for (let g2 = 0; g2 < 60; g2++){
+    const x = 3 + rnd(w-6), y = 3 + rnd(h-6);
+    if (get(x,y) === 'g' && Math.abs(y-mid) > 1){ set(x,y,'C'); break; }
+  }
+  // gates + cleared road row
+  for (let x = 1; x < w-1; x++) if ('#YOQVCw'.includes(get(x,mid))) set(x,mid,'g');
+  const gates = {};
+  if (Z.prev){ set(0,mid,'p'); set(1,mid,'g'); gates.prev = [0,mid]; }
+  if (Z.next){ set(w-1,mid,'p'); set(w-2,mid,'g'); gates.next = [w-1,mid]; }
+  // warning sign by the back gate
+  if (Z.prev) set(2, mid-1, 'i');
+  // deed plot: clear its footprint
+  if (Z.plot){
+    const p = PLOTS[Z.plot];
+    for (let j = -2; j <= 1; j++) for (let i = -2; i <= 2; i++){
+      const X = p.x + i, Y2 = p.y + j;
+      if (X > 0 && X < w-1 && Y2 > 0 && Y2 < h-1) set(X, Y2, 'g');
+    }
+  }
+  return { rows, gates };
 }
 
 function genCata(floor){
@@ -162,14 +232,15 @@ const World = (() => {
     ppx: 17*TILE+24, ppy: 8*TILE+24,   // pixel pos
     dir: 0,                            // 0 down 1 up 2 left 3 right
     cataFloor: 0, cata: null,
-    houseId: null,
+    houseId: null, zoneGates: null, nodeHits: {},
     stepFrame: 0, animT: 0, lastDay: 1,
   };
   const tileOf = v => Math.floor(v / TILE);
 
   function loadRows(map){
     if (map === 'town') return TOWN_ROWS.slice();
-    if (map === 'woods') return genWoods();
+    if (map === 'woods'){ const g = genWoods(); W.zoneGates = g.gates; return g.rows; }
+    if (ZONES[map]){ const g = genZone(map); W.zoneGates = g.gates; return g.rows; }
     if (map === 'arena') return ARENA_ROWS.slice();
     if (map === 'house') return genHouse(plotTier(W.houseId) || 1);
     if (map === 'manor'){
@@ -189,12 +260,14 @@ const World = (() => {
   function enter(map, x, y){
     if (map === 'cata' && !W.cata) W.cata = genCata(W.cataFloor);
     W.map = map;
+    W.zoneGates = null;
+    W.nodeHits = {};
     W.rows = loadRows(map);
     W.h = W.rows.length; W.w = W.rows[0].length;
     W.ppx = x*TILE + TILE/2; W.ppy = y*TILE + TILE/2;
     G.pos = { map, x, y };
     if (typeof Combat !== 'undefined')
-      Combat.reset(map === 'woods' ? 'woods' : map === 'cata' ? 'cata' : null);
+      Combat.reset(ZONES[map] ? map : map === 'cata' ? 'cata' : null);
   }
 
   function tileAt(x, y){
@@ -262,6 +335,12 @@ const World = (() => {
       if (at(17,27) || at(18,27)) return enter('woods', 15, 1);
     } else if (W.map === 'woods'){
       if (at(15,0)) return enter('town', 17, 26);
+      if (W.zoneGates?.next && at(...W.zoneGates.next)) return enter('fen', 1, 13);
+    } else if (ZONES[W.map]){
+      const Z = ZONES[W.map];
+      if (W.zoneGates?.prev && at(...W.zoneGates.prev))
+        return Z.prev === 'woods' ? enter('woods', 28, 12) : enter(Z.prev, 32, 13);
+      if (W.zoneGates?.next && at(...W.zoneGates.next)) return enter(Z.next, 1, 13);
     } else if (W.map === 'manor'){
       if (t === 'D') return enter('town', 17, 6);
     } else if (W.map === 'house'){
@@ -292,7 +371,7 @@ const World = (() => {
     if (npcAt(fx, fy)) return true;
     const pid = plotAt(fx, fy);
     if (pid) return true;
-    return 'wsbkxRCihA'.includes(tileAt(fx, fy)) ||
+    return 'wsbkxRCihAYOQV'.includes(tileAt(fx, fy)) ||
       ((W.map === 'manor' || W.map === 'house') && furnitureList().some(f => f.x === fx && f.y === fy));
   }
   async function interact(){
@@ -312,8 +391,14 @@ const World = (() => {
       case 'C': return Systems.chest(fx, fy);
       case 'h': return Systems.enterCata();
       case 'A': return Systems.altar();
-      case 'i': return UI.say(['"Here lies the door to the catacombs."',
-        '"Depth is wealth. Depth is also teeth. — The Gravedigger"']);
+      case 'Y': case 'O': case 'Q': case 'V': return Systems.gather(t, fx, fy);
+      case 'i': {
+        const Z = ZONES[W.map];
+        if (Z) return UI.say([`A warning is carved here: "${Z.n.toUpperCase()} — beasts of level ${Z.lvl[0]} to ${Z.lvl[1]}."`,
+          '"Turn back if your pack is green. The valley does not soften for anyone."']);
+        return UI.say(['"Here lies the door to the catacombs."',
+          '"Depth is wealth. Depth is also teeth. — The Gravedigger"']);
+      }
       case 'F':
         if (W.map === 'manor' || W.map === 'house') return Systems.placeFurniture(fx, fy);
         break;
@@ -384,7 +469,14 @@ const World = (() => {
       if (W.map !== 'cata' && G.flags.chests[`${W.map}:${x},${y}`]) return SPR.get('chestO');
       if (W.map === 'cata' && W.cata.opened?.[`${x},${y}`]) return SPR.get('chestO');
     }
+    const Z = ZONES[W.map];
+    if (Z && t === 'g' && Z.ground) return SPR.get(Z.ground);
+    if (Z && t === 'Q') return SPR.get('nore_' + (Z.oreTier || 'ironore'));
     return SPR.get(TILE_SPR[t] || 'grass');
+  }
+  function groundSprite(){
+    const Z = ZONES[W.map];
+    return SPR.get((Z && Z.ground) || 'grass');
   }
 
   function draw(){
@@ -402,6 +494,8 @@ const World = (() => {
     for (let y = y0; y <= y0 + VIEW_H + 1; y++){
       for (let x = x0; x <= x0 + VIEW_W + 1; x++){
         const t = tileAt(x, y);
+        if (OVERLAY.has(t)) // trees & harvest nodes sit on the zone's ground
+          ctx.drawImage(groundSprite(), Math.round(x*TILE - camX), Math.round(y*TILE - camY), TILE, TILE);
         ctx.drawImage(tileSprite(x, y, t), Math.round(x*TILE - camX), Math.round(y*TILE - camY), TILE, TILE);
         if (t === 's'){
           const p = G.farm[`${W.map}:${x},${y}`];
@@ -494,6 +588,7 @@ const World = (() => {
     else if (h >= 21 || h < 5) tint = 0.55;
     else if (h >= 19) tint = (h - 19) / 2 * 0.55;
     else if (h < 7) tint = (7 - h) / 2 * 0.55;
+    if (ZONES[W.map] && ZONES[W.map].dark) tint = Math.max(tint, ZONES[W.map].dark);
     if (tint > 0){
       ctx.fillStyle = `rgba(8,5,24,${tint})`;
       ctx.fillRect(0, 0, cvs.width, cvs.height);
@@ -554,7 +649,8 @@ const World = (() => {
 
   function locName(){
     if (W.map === 'house' && W.houseId) return PLOTS[W.houseId].n;
-    return { town:'Grimvale', woods:'Murkwood', manor:'Hollow Manor', arena:'Soul Arena',
+    if (ZONES[W.map]) return `${ZONES[W.map].n} (Lv.${ZONES[W.map].lvl[0]}-${ZONES[W.map].lvl[1]})`;
+    return { town:'Grimvale', manor:'Hollow Manor', arena:'Soul Arena',
       cata:`Catacombs B${W.cataFloor}` }[W.map] || 'Grimvale';
   }
 
@@ -569,5 +665,7 @@ const World = (() => {
     get cataFloor(){ return W.cataFloor; }, set cataFloor(v){ W.cataFloor = v; },
     get cata(){ return W.cata; }, set cata(v){ W.cata = v; },
     get houseId(){ return W.houseId; }, set houseId(v){ W.houseId = v; },
+    zone(){ return ZONES[W.map] || null; },
+    get nodeHits(){ return W.nodeHits; },
   };
 })();

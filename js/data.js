@@ -415,6 +415,9 @@ const ITEMS = {
   fish_lanternjaw: { n:'Lanternjaw (catch)', k:'fish', price:180, d:'Its lure still glows. Renders into glow bait.' },
   fish_moonscale:  { n:'Moonscale (catch)',  k:'fish', price:600, d:'A legend, landed. Worth a fortune — or rare reagents.' },
   plank: { n:'Old Plank',  k:'mat', price:50,  d:'Salvaged manor timber.' },
+  ironore:   { n:'Iron Ore',   k:'mat', price:90,  d:'Cold and heavy. Odd can forge gear from 3 lumps.' },
+  silverore: { n:'Silver Ore', k:'mat', price:220, d:'Moon-pale metal. Forges finer gear.' },
+  moonore:   { n:'Moonore',    k:'mat', price:500, d:'It hums on full moons. Forges masterwork gear.' },
   stone: { n:'Crypt Stone',k:'mat', price:80,  d:'A solid block of grave-granite.' },
   ecto:  { n:'Ectoplasm',  k:'mat', price:200, d:'Wobbles. Essential for haunted renovation.' },
   f_chair:   { n:'Wraith Chair',   k:'furn', spr:'fchair',  price:200,  d:'It rocks itself.' },
@@ -601,6 +604,12 @@ const PLOTS = {
     buff:'Rare fish bite +20% more per tier.' },
   shore:    { n:'Shore Cottage',    map:'town',  x:22, y:24, land:7000,
     buff:'Eli pays +10% more for your catches per tier.' },
+  fenstilts:{ n:'Fen Stilt-House',  map:'fen',   x:8,  y:8,  land:11000,
+    buff:'+5% double-gather chance per tier, everywhere.' },
+  hillfort: { n:'Hillfort',         map:'hills', x:25, y:7,  land:16000,
+    buff:'Ore veins have a 20% chance per tier to yield an extra ore.' },
+  frostlodge:{ n:'Frost Lodge',     map:'frost', x:9,  y:18, land:24000,
+    buff:'Enemies everywhere drop +8% gold per tier.' },
 };
 const PLOT_TIERS = [
   null,
@@ -609,6 +618,61 @@ const PLOT_TIERS = [
   { n:'Hall',    cost:{ gold:15000, plank:12, stone:12, ecto:6 }, furn:14 },
 ];
 function plotTier(id){ return (G.houses[id] && G.houses[id].tier) || 0; }
+
+// ---------- THE OVERWORLD: a chain of zones, each strictly tougher ----------
+// NO level scaling: each zone's wilds are a fixed band. Gear up or die.
+// nodes: harvestable resources (Y tree, O rock, Q ore, V wisp-stone)
+const ZONES = {
+  woods: { n:'Murkwood', lvl:[2,5], next:'fen',
+    enemies:[ {sp:'wispy',w:10},{sp:'skulpup',w:8},{sp:'shroomb',w:8},{sp:'flitbat',w:8},
+      {sp:'vipervine',w:4},{sp:'frostfae',w:3},{sp:'mothmare',w:2},{sp:'gloomkin',w:5,night:true} ],
+    count:9, nodes:{ Y:5, O:2 } },
+  fen: { n:'Gravefen', lvl:[7,11], prev:'woods', next:'hills',
+    ground:'marsh', water:true, plot:'fenstilts',
+    enemies:[ {sp:'shroomb',w:6},{sp:'vipervine',w:6},{sp:'gloomkin',w:5},{sp:'dripp',w:4},
+      {sp:'rotwalker',w:3},{sp:'mycolossus',w:2} ],
+    count:11, nodes:{ Y:3, V:3, O:2 } },
+  hills: { n:'Hollow Hills', lvl:[12,17], prev:'fen', next:'mirk',
+    ground:'rockg', plot:'hillfort', oreTier:'ironore',
+    enemies:[ {sp:'cryptmite',w:6},{sp:'gravehound',w:5},{sp:'emberghast',w:4},
+      {sp:'banshriek',w:3},{sp:'rotwalker',w:3},{sp:'boneel',w:2} ],
+    count:12, nodes:{ O:5, Q:4, Y:1 } },
+  mirk: { n:'Mirkfall', lvl:[18,24], prev:'hills', next:'ash',
+    ground:'dgrass', dark:0.25, oreTier:'ironore',
+    enemies:[ {sp:'nocturnyx',w:5},{sp:'hollowshade',w:6},{sp:'banshriek',w:4},
+      {sp:'gloomkin',w:4},{sp:'mothmare',w:4},{sp:'thornwraith',w:2} ],
+    count:12, nodes:{ Y:6, V:3, Q:2 } },
+  ash: { n:'Ashreach', lvl:[25,32], prev:'mirk', next:'frost',
+    ground:'ashg', oreTier:'silverore',
+    enemies:[ {sp:'emberghast',w:6},{sp:'pyrelich',w:3},{sp:'vipervine',w:4},
+      {sp:'jackrot',w:4},{sp:'cryptlord',w:3},{sp:'rotwalker',w:4} ],
+    count:13, nodes:{ O:4, Q:4, V:2 } },
+  frost: { n:'Frostmere', lvl:[33,40], prev:'ash', next:'summit',
+    ground:'snow', water:true, plot:'frostlodge', oreTier:'silverore',
+    enemies:[ {sp:'frostfae',w:6},{sp:'mireghast',w:4},{sp:'banshriek',w:4},
+      {sp:'nocturnyx',w:4},{sp:'mycolossus',w:3},{sp:'hollowshade',w:4} ],
+    count:13, nodes:{ Q:4, O:3, V:3 } },
+  summit: { n:'The Pale Summit', lvl:[42,50], prev:'frost',
+    ground:'rockg', dark:0.15, oreTier:'moonore',
+    enemies:[ {sp:'cryptlord',w:4},{sp:'pyrelich',w:4},{sp:'thornwraith',w:4},
+      {sp:'mireghast',w:4},{sp:'nocturnyx',w:4},{sp:'mothmare',w:3},{sp:'hollowking',w:1} ],
+    count:14, nodes:{ Q:4, V:4, O:2 } },
+};
+// gathering: hits to break a node, what it yields, xp, skill gates
+const NODES = {
+  Y: { n:'Gnarled Tree', hits:3, item:'plank', qty:[1,2], xp:8 },
+  O: { n:'Stone Heap',   hits:3, item:'stone', qty:[1,2], xp:10 },
+  Q: { n:'Ore Vein',     hits:4, item:null,    qty:[1,1], xp:0 }, // item/xp from zone oreTier
+  V: { n:'Wisp Stone',   hits:3, item:'ecto',  qty:[1,1], xp:20 },
+};
+const ORE_XP = { ironore:18, silverore:30, moonore:45 };
+const ORE_REQ = { ironore:1, silverore:8, moonore:16 };
+// the shop forge: 3 ore + gold -> random gear of that tier's level
+const FORGE = [
+  { ore:'ironore',   gold:200,  lvl:8,  n:'Iron-forged gear (Lv.8)' },
+  { ore:'silverore', gold:600,  lvl:20, n:'Silver-forged gear (Lv.20)' },
+  { ore:'moonore',   gold:1500, lvl:35, n:'Moonforged gear (Lv.35)' },
+];
 
 const ROOMS = {
   kitchen:      { n:'Kitchen Wing',  cost:{gold:800,  plank:3, stone:2 }, d:'Unlocks the brewing cauldron.' },
@@ -629,6 +693,8 @@ const SKILLS = {
     d:'Cauldron craft. Each level: +2% chance to double a brew. Recipes unlock as you level.' },
   delving:    { n:'Delving', icon:'⛏', col:'#e8c95d',
     d:'Catacomb craft. Each level: +3% chest gold. Every 5 levels: descend 1 extra floor per stair.' },
+  gathering:  { n:'Gathering', icon:'🪓', col:'#c9a86d',
+    d:'Chopping, quarrying, mining. Each level: +2% double-yield chance. Silver ore at Lv.8, moonore at Lv.16.' },
 };
 // Cumulative XP required to BE level l (level 1 = 0 xp). Endless curve.
 function skillXpFor(l){ return Math.floor(60 * Math.pow(l-1, 2.1)); }

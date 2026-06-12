@@ -55,21 +55,21 @@ const Combat = (() => {
   }
 
   function zoneLevel(zone){
-    const nl = Systems.skillLvl('necromancy');
+    if (ZONES[zone]) return Math.round((ZONES[zone].lvl[0] + ZONES[zone].lvl[1]) / 2);
     if (zone === 'cata') return 1 + World.cataFloor * 2;
-    return 2 + Math.floor((nl - 1) * 0.7);
+    return 3;
   }
 
   function spawnZone(zone){
-    if (zone === 'woods'){
-      const n = 9 + plotTier('hide') * 2;
-      const tbl = ENCOUNTERS.woods.filter(e => !e.night || UI.isNight());
+    if (ZONES[zone]){
+      // fixed difficulty band — the ZONE is dangerous, not the math
+      const Z = ZONES[zone];
+      const n = Z.count + (zone === 'woods' ? plotTier('hide') * 2 : 0);
+      const tbl = Z.enemies.filter(e => !e.night || UI.isNight());
       for (let i = 0; i < n; i++){
         const s = freeSpot(); if (!s) continue;
-        let pool = tbl;
-        if (plotTier('hide') && Math.random() < 0.12 * plotTier('hide')) pool = tbl.filter(e => e.w <= 5).length ? tbl.filter(e => e.w <= 5) : tbl;
-        const e = pickW(pool);
-        spawnEnemy(e.sp, e.min + rnd(e.max - e.min + 1) + Math.floor((Systems.skillLvl('necromancy')-1) * 0.7), s);
+        const e = pickW(tbl);
+        spawnEnemy(e.sp, Z.lvl[0] + rnd(Z.lvl[1] - Z.lvl[0] + 1), s);
       }
     } else if (zone === 'cata'){
       const lvl = zoneLevel('cata');
@@ -224,7 +224,7 @@ const Combat = (() => {
   }
 
   function dropLoot(e){
-    const goldMult = 1 + gearAffix('gold')/100;
+    const goldMult = 1 + gearAffix('gold')/100 + 0.08 * plotTier('frostlodge');
     const gold = Math.round((4 + e.lvl * 2.2) * (e.boss ? 8 : 1) * goldMult * (0.7 + Math.random()*0.6));
     ents.push({ k:'d', x:e.x + rnd(20)-10, y:e.y + rnd(20)-10, gold, ttl:45 });
     if (e.boss || Math.random() < 0.07)
@@ -613,6 +613,7 @@ const Combat = (() => {
   function clearHostiles(){ ents = ents.filter(e => e.k !== 'e' && e.k !== 'p'); }
 
   return { reset, update, draw, playerAttack, playerBolt, throwJar, pstats, minionCap,
+    floatText: floater,
     syncMinions, spawnEnemy, spawnRivalPack, clearHostiles, zoneLevel,
     enemies: () => enemies(), nearestEnemy, hasAggro: () => enemies().some(e => e.aggro) };
 })();

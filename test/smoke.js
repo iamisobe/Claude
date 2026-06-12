@@ -91,7 +91,7 @@ vm.runInContext(`(${function tests(check){
   check('manor rows uniform width 26', MANOR_ROWS.every(r => r.length === 26),
     MANOR_ROWS.map(r=>r.length).join(','));
   check('manor has 18 rows', MANOR_ROWS.length === 18);
-  const woods = genWoods();
+  const woods = genWoods().rows;
   check('woods rows uniform width 30', woods.every(r => r.length === 30));
   check('woods exit is path', woods[0][15] === 'p');
 
@@ -160,12 +160,60 @@ vm.runInContext(`(${function tests(check){
       && Object.keys(g.aff).length >= 1 && Object.keys(g.aff).every(k => AFFIXES[k])
       && g.rar >= 0 && g.rar <= 2, JSON.stringify(g));
   }
+  // ---- zones: fixed bands, valid species, traversable, nodes ----
+  {
+    let prevMax = 0;
+    let cur = 'woods';
+    const chain = [];
+    while (cur){ chain.push(cur); cur = ZONES[cur].next; }
+    check('zone chain length >= 7', chain.length >= 7, chain.join('>'));
+    for (const id of chain){
+      const Z = ZONES[id];
+      check(`zone ${id}: species exist`, Z.enemies.every(e => DEX[e.sp]));
+      check(`zone ${id}: tougher than the last`, Z.lvl[0] > prevMax || id === 'woods',
+        `${Z.lvl[0]} vs prev max ${prevMax}`);
+      prevMax = Z.lvl[1];
+      if (Z.oreTier) check(`zone ${id}: ore item exists`, !!ITEMS[Z.oreTier]);
+      if (Z.plot) check(`zone ${id}: plot defined`, PLOTS[Z.plot] && PLOTS[Z.plot].map === id);
+    }
+    for (const [c2, nd] of Object.entries(NODES))
+      if (nd.item) check(`node ${c2}: item exists`, !!ITEMS[nd.item]);
+    for (const f of FORGE) check(`forge ${f.ore}: item exists`, !!ITEMS[f.ore]);
+    // generated zones: gates connected, plot footprint clear
+    const SOLIDZ = new Set(['#','w','Y','O','Q','V','C','i']);
+    for (const id of chain){
+      if (id === 'woods') continue;
+      for (let trial = 0; trial < 5; trial++){
+        const gz = genZone(id);
+        const rows = gz.rows;
+        check(`zone ${id} t${trial}: rows uniform`, rows.every(r => r.length === rows[0].length));
+        const start = gz.gates.prev || gz.gates.next;
+        const seen = new Set([start.join(',')]);
+        const q = [start];
+        while (q.length){
+          const [x,y] = q.pop();
+          for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+            const nx=x+dx, ny=y+dy, ch=rows[ny] && rows[ny][nx];
+            if (ch && !SOLIDZ.has(ch) && !seen.has(nx+','+ny)){ seen.add(nx+','+ny); q.push([nx,ny]); }
+          }
+        }
+        if (gz.gates.prev && gz.gates.next)
+          check(`zone ${id} t${trial}: gates connected`, seen.has(gz.gates.next.join(',')));
+        if (ZONES[id].plot){
+          const p = PLOTS[ZONES[id].plot];
+          check(`zone ${id} t${trial}: plot clear+reachable`,
+            rows[p.y][p.x] === 'g' && seen.has(p.x + ',' + (p.y+1)));
+        }
+      }
+    }
+  }
+
   // ---- plots ----
-  const woods2 = genWoods();
+  const woods2 = genWoods().rows;
   const mapRows = { town: TOWN_ROWS, woods: woods2 };
   const SOLID2 = new Set(['#','w','f','G','B','r','W','R','C','b','k','x','A','i','h','X','s']);
   for (const [id, p] of Object.entries(PLOTS)){
-    check(`plot ${id}: map valid`, !!mapRows[p.map]);
+    if (!mapRows[p.map]){ check(`plot ${id}: in a real zone`, !!ZONES[p.map]); continue; }
     const rows = mapRows[p.map];
     const ok = t => t && !SOLID2.has(t);
     check(`plot ${id}: post tile open`, ok(rows[p.y] && rows[p.y][p.x]), rows[p.y] && rows[p.y][p.x]);

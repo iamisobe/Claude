@@ -65,6 +65,14 @@ map.
   Pier (rare fish), Graveyard Ossuary (start catacomb dives deeper), Square
   Townhouse (shop discount + daily rent), Moonhill Tower (capture + brewing),
   and more. Every house has its own interior you can decorate with furniture.
+- **A chain of overworld zones, each strictly tougher** — Murkwood (Lv.2-5)
+  → Gravefen → Hollow Hills → Mirkfall → Ashreach → Frostmere → The Pale
+  Summit (Lv.42-50, where the Hollow King roams wild). Fixed difficulty per
+  zone, no level scaling: gear up or turn back.
+- **Resource gathering** — chop gnarled trees, quarry stone heaps, crack
+  wisp-stones for ectoplasm, and mine iron/silver/moon ore veins (gated by
+  the new endless Gathering skill). The shop's forge hammers 3 ore into
+  random gear. Three frontier deed plots join the housing roster.
 - **Endless catacombs** — procedurally generated floors that scale forever,
   richer chests the deeper you go, and a guardian to bind every 5th floor.
   The Hollow King waits at B25. The stairs keep going.

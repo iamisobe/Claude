@@ -319,7 +319,37 @@ const Systems = (() => {
     }
   }
 
-  // ---------- manor (the housing tutorial) ----------
+  // ---------- gathering: chop trees, quarry rock, mine ore ----------
+  async function gather(t, x, y){
+    const N = NODES[t];
+    if (!N) return;
+    const Z = World.zone() || {};
+    const item = t === 'Q' ? (Z.oreTier || 'ironore') : N.item;
+    if (t === 'Q'){
+      const req = ORE_REQ[item] || 1;
+      if (skillLvl('gathering') < req)
+        return UI.say(`This vein needs Gathering Lv.${req}. (You are Lv.${skillLvl('gathering')})`);
+    }
+    const key = `${x},${y}`;
+    const hits = (World.nodeHits[key] || 0) + 1;
+    World.nodeHits[key] = hits;
+    G.pc.swing = 0.18; // swing the staff at it
+    if (hits < N.hits){
+      Combat.floatText(x*TILE + 24, y*TILE + 10, '✦', '#e8c95d');
+      return;
+    }
+    // it breaks!
+    let qty = N.qty[0] + rnd(N.qty[1] - N.qty[0] + 1);
+    if (Math.random() < 0.02 * skillLvl('gathering') + 0.05 * plotTier('fenstilts')){
+      qty *= 2;
+      UI.toast('Double yield!');
+    }
+    if (t === 'Q' && Math.random() < 0.20 * plotTier('hillfort')) qty++;
+    Inv.add(item, qty);
+    skillAdd('gathering', t === 'Q' ? ORE_XP[item] : N.xp);
+    World.setTile(x, y, 'g');
+    Combat.floatText(x*TILE + 24, y*TILE + 10, `+${qty} ${ITEMS[item].n}`, '#c9a86d');
+  }
   function manorDone(){ return ['kitchen','study','conservatory','crypt'].every(r => G.manor.restored[r]); }
 
   async function restore(x, y){
@@ -718,8 +748,27 @@ const Systems = (() => {
 
   async function shop(){
     for(;;){
-      const c = await UI.choice(['Buy', 'Sell', 'Leave']);
-      if (c === 2 || c === -1) return;
+      const c = await UI.choice(['Buy', 'Sell', 'Forge gear (3 ore)', 'Leave']);
+      if (c === 3 || c === -1) return;
+      if (c === 2){
+        for(;;){
+          const i = await UI.panelList(`THE FORGE — Odd hammers ore into gear`, FORGE.map(f => ({
+            html:`<b>${f.n}</b> — 3× ${ITEMS[f.ore].n} (have ${Inv.count(f.ore)}) + ${f.gold}⛁`,
+            dim: Inv.count(f.ore) < 3 || G.gold < f.gold,
+          })), { footer:'Z: forge · X: back · result is random gear of that level' });
+          if (i < 0) break;
+          const f = FORGE[i];
+          if (Inv.count(f.ore) < 3 || G.gold < f.gold){ UI.toast('Not enough ore or gold.'); continue; }
+          if (G.gear.bag.length >= 60){ UI.toast('Gear bag full!'); continue; }
+          Inv.take(f.ore, 3);
+          G.gold -= f.gold;
+          const g = rollGear(f.lvl);
+          G.gear.bag.push(g);
+          skillAdd('gathering', 15);
+          await UI.say(`Odd hammers, quenches, mutters... ${RARITIES[g.rar].n.toUpperCase()}: ${g.name}! (in your gear bag)`);
+        }
+        continue;
+      }
       if (c === 0){
         for(;;){
           const stock = SHOP_STOCK.filter(id => !(ITEMS[id].k === 'rod' && Inv.count(id) > 0));
@@ -936,7 +985,7 @@ const Systems = (() => {
     } catch { return null; }
   }
 
-  return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish, fishingFx,
+  return { skillLvl, skillAdd, afterLoss, healAll, cropStage, plot, fish, fishingFx, gather,
     restore, placeFurniture, sleep, storage, cauldron, altar, manorDone,
     enterCata, descend, ascend, chest, arena, arenaExit, rivalDefeated, woodsDuel,
     plotMenu, deedsMenu, gearMenu,
