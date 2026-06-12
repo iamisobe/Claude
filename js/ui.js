@@ -9,6 +9,7 @@ const $ = id => document.getElementById(id);
 const Input = {
   stack: [],          // active modal handlers; top receives normalized keys
   held: {},           // for world movement
+  keys: {},           // raw key state (e.g. literal 'a' during the fishing reel)
   push(h){ this.stack.push(h); this.sync(); },
   pop(h){ const i = this.stack.lastIndexOf(h); if (i >= 0) this.stack.splice(i,1); this.sync(); },
   top(){ return this.stack[this.stack.length-1]; },
@@ -28,6 +29,7 @@ function normKey(e){
   return null;
 }
 document.addEventListener('keydown', e => {
+  Input.keys[e.key] = true;
   const k = normKey(e);
   if (k){
     e.preventDefault();
@@ -43,9 +45,17 @@ document.addEventListener('keydown', e => {
   }
 });
 document.addEventListener('keyup', e => {
+  Input.keys[e.key] = false;
   const k = normKey(e);
   if (k) Input.held[k] = false;
 });
+
+// device-appropriate control names for UI text ('A' on-screen button vs keys)
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) ||
+  (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+const KEYN = IS_TOUCH
+  ? { a:'A', bolt:'BOLT', jar:'JAR', menu:'☰' }
+  : { a:'Z', bolt:'X', jar:'C', menu:'Esc' };
 
 // ---------- touch controls (mobile / iPad) ----------
 // Buttons synthesize the same key events the keyboard handler consumes,

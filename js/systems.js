@@ -119,7 +119,9 @@ const Systems = (() => {
         timers.push(setTimeout(() => finish('miss'), 900)); // strike window
       }, biteAfter));
       const h = k => {
-        if (k === 'ok') finish(fxFish && fxFish.phase === 'bite' ? 'hit' : 'early');
+        // the literal 'A' key also strikes (it normalizes to 'left', so check raw state)
+        if (k === 'ok' || Input.keys['a'] || Input.keys['A'])
+          finish(fxFish && fxFish.phase === 'bite' ? 'hit' : 'early');
         else if (k === 'no') finish('cancel');
       };
       function finish(r){
@@ -148,17 +150,21 @@ const Systems = (() => {
       sc.fillStyle = '#0d1320';
       sc.fillRect(0, 0, 16, 16);
 
+      $('fish-hint').textContent = IS_TOUCH
+        ? 'HOLD the A button to lift the hook — keep the fish in the green!'
+        : 'HOLD Z (or A / Space) to lift the hook — keep the fish in the green!';
+      const lifting = () => Input.held.ok || Input.keys['a'] || Input.keys['A'];
       const trackTop = 16, trackH = 252, trackX = 38, trackW = 84;
       const fl = skillLvl('fishing'), rod = Inv.bestRod();
-      const barH = Math.min(170, 64 + fl * 2.2 + rod * 6 + 6 * plotTier('pondshack'));
+      const barH = Math.min(170, 78 + fl * 2.2 + rod * 6 + 6 * plotTier('pondshack'));
       let barY = trackTop + trackH - barH, vy = 0;
       let fishY = barY + barH / 2, fishTgt = fishY, retarget = 0.8; // starts hooked, inside the bar
       const feisty = 36 + lvl * 2.8 + (DEX[sp].rare ? 50 : 0);
       let prog = 42, last = performance.now(), raf, doneFlag = false;
 
       function update(dt, now){
-        // catch bar physics: hold A to lift
-        vy += (Input.held.ok ? -560 : 460) * dt;
+        // catch bar physics: hold to lift
+        vy += (lifting() ? -560 : 460) * dt;
         vy *= 0.92;
         barY += vy * dt;
         if (barY < trackTop){ barY = trackTop; vy *= -0.25; }
@@ -173,7 +179,7 @@ const Systems = (() => {
         fishY += Math.sign(d) * Math.min(Math.abs(d), feisty * dt) + Math.sin(now / 90) * 0.6;
         // progress: a slow tug-of-war, not a coin flip
         const inside = fishY >= barY - 5 && fishY <= barY + barH + 5;
-        prog += (inside ? 15 : -(8 + lvl * 0.22)) * dt;
+        prog += (inside ? 15 : -(7 + lvl * 0.2)) * dt;
         window._reelDbg = { barY, barH, fishY, prog };
       }
       function draw(now){
@@ -186,14 +192,14 @@ const Systems = (() => {
           c.fillRect(trackX, trackTop + ((now / 26 + i * 55) % trackH), trackW, 7);
         }
         // catch bar
-        const stress = Input.held.ok ? 0.95 : 0.75;
+        const stress = lifting() ? 0.95 : 0.75;
         c.fillStyle = `rgba(109,216,109,${0.30 * stress})`;
         c.fillRect(trackX + 2, barY, trackW - 4, barH);
         c.strokeStyle = '#6dd86d'; c.strokeRect(trackX + 2, barY, trackW - 4, barH);
         // fishing line + fish silhouette (wiggling)
         c.strokeStyle = '#8a8268';
         c.beginPath(); c.moveTo(trackX + trackW / 2, trackTop); c.lineTo(trackX + trackW / 2, fishY - 12); c.stroke();
-        const wig = Math.sin(now / 70) * (Input.held.ok ? 5 : 2.5);
+        const wig = Math.sin(now / 70) * (lifting() ? 5 : 2.5);
         c.save();
         c.translate(trackX + trackW / 2 + wig, fishY);
         c.rotate(Math.sin(now / 120) * 0.25);
@@ -755,8 +761,8 @@ const Systems = (() => {
       save();
     } else if (c === 1){
       const tips = [
-        'Your bound grims fight BESIDE you now, dear. Weaken a wild one below a third (watch for the jar mark) and press C to bind it.',
-        'X hurls a hex bolt — it costs Soul, which returns with time. Your staff (Z) costs nothing but courage.',
+        `Your bound grims fight BESIDE you now, dear. Weaken a wild one below a third (watch for the jar mark) and use ${KEYN.jar} to bind it.`,
+        `${KEYN.bolt} hurls a hex bolt — it costs Soul, which returns with time. Your staff (${KEYN.a}) costs nothing but courage.`,
         'Monster seeds grow into grims! And your Farming level decides how strong they hatch.',
         'Some fish bite only at night, the rarest under a NEW or FULL moon. Sleep in a bed to pass the days.',
         'Finish restoring ALL of Hollow Manor and the deed book is yours — then every SALE post in the valley can become a home with its own power.',

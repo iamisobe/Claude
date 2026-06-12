@@ -7,10 +7,11 @@
 'use strict';
 
 const Tutorial = (() => {
+  const K = KEYN; // device-appropriate names: {a, bolt, jar, menu}
 
   // Each step: {icon, obj, intro? (Morwen, once), gift? (run once), check}
   const STEPS = [
-    { icon:'✦', obj:'Move with the D-pad (or WASD / arrow keys).',
+    { icon:'✦', obj:IS_TOUCH ? 'Move with the D-pad.' : 'Move with WASD or the arrow keys.',
       check: () => Tutorial._moved >= 5 },
 
     { icon:'↓', obj:'Head SOUTH down the path, through the gate, into Murkwood.',
@@ -18,53 +19,53 @@ const Tutorial = (() => {
         'Now walk SOUTH, dear — all the way down the path and through the gate. Murkwood waits.'],
       check: () => World.map === 'woods' },
 
-    { icon:'⚔', obj:'Defeat a wild grim! A (or Z) swings your staff, ✦ BOLT (X) hurls a hex.',
+    { icon:'⚔', obj:`Defeat a wild grim! ${K.a} swings your staff, ${K.bolt} hurls a hex.`,
       intro:['Murkwood crawls with wild grims, and they will not wait to be asked.',
-        'Get close and tap A to swing your staff. Or tap BOLT — it spends Soul, which returns on its own.',
+        `Get close and use ${K.a} to swing your staff. Or use ${K.bolt} — it spends Soul, which returns on its own.`,
         'Your own grim fights at your side. Go on — put one DOWN.'],
       check: () => (G.kills || 0) >= 1 },
 
-    { icon:'◍', obj:'Weaken a grim until the ◍ mark appears, then tap JAR (C) to bind it!',
+    { icon:'◍', obj:`Weaken a grim until the ◍ mark appears, then use ${K.jar} to bind it!`,
       intro:['Now, the necromancer\'s true art. Hurt a wild grim until it is nearly spent —',
-        'a glowing ◍ mark appears above it. THEN tap JAR to hurl a soul jar.',
+        `a glowing ◍ mark appears above it. THEN use ${K.jar} to hurl a soul jar.`,
         'A bound grim rises and fights for you, forever. Your pack grows with your Necromancy skill. Catch one!'],
       check: () => (G.party.length + G.storage.length) >= 2 },
 
-    { icon:'☰', obj:'Open the MENU (☰ or Esc) and have a look around, then close it.',
+    { icon:'☰', obj:`Open the MENU (${K.menu}) and have a look around, then close it.`,
       intro:['Splendid! That grim is yours now.',
-        'Tap ☰ (top-right) any time: your PACK, your SATCHEL, your GEAR, your SKILLS, the DEED BOOK, and the Grimdex.',
+        `Open the menu (${K.menu}) any time: your PACK, your SATCHEL, your GEAR, your SKILLS, the DEED BOOK, and the Grimdex.`,
         'Every skill climbs FOREVER — Necromancy, Fishing, Farming, Brewing, Delving. Open the menu and look around.'],
       check: () => !!G.tut.menuOpened },
 
-    { icon:'🎣', obj:'Find Fisher Eli by the town lake (east side) and talk to him (A).',
+    { icon:'🎣', obj:`Find Fisher Eli by the town lake (east side) and talk to him (${K.a}).`,
       intro:['Time you learned to fish. Head back NORTH to town.',
-        'Fisher Eli idles by the lake on the east side. Talk to him — face him and press A. He owes me a favour.'],
+        `Fisher Eli idles by the lake on the east side. Talk to him — face him and use ${K.a}. He owes me a favour.`],
       check: () => !!G.flags.metEli },
 
-    { icon:'🎣', obj:'Cast (A at the water), wait for the "!", strike, then HOLD A to reel it in!',
-      intro:['Rod in hand! Stand at the water\'s edge, FACE the water, and press A to cast.',
-        'Then WAIT. The bobber will twitch — ignore the little nibbles. When it PLUNGES and you see "!", strike fast with A!',
-        'Then HOLD A to lift the hook, let go to drop it. Keep the fish inside the green band until the CATCH meter fills — and it\'s yours.',
+    { icon:'🎣', obj:`Cast (${K.a} at the water), wait for the "!", strike, then HOLD ${K.a} to reel it in!`,
+      intro:[`Rod in hand! Stand at the water's edge, FACE the water, and use ${K.a} to cast.`,
+        `Then WAIT. The bobber will twitch — ignore the little nibbles. When it PLUNGES and you see "!", strike fast with ${K.a}!`,
+        `Then HOLD ${K.a} to lift the hook, let go to drop it. Keep the fish inside the green band until the CATCH meter fills — and it's yours.`,
         'Every catch is yours to use: SELL it to Eli, have him RENDER it into bait and building reagents, or bind it into your pack with a jar. The rarest fish bite only at night or under a new or full moon.'],
       check: () => (G.skills.fishing || 0) > 0 },
 
-    { icon:'☘', obj:'Plant a seed: walk to the farm plots (north-east, by the fence) and press A at a soil plot.',
+    { icon:'☘', obj:`Plant a seed: walk to the farm plots (north-east, by the fence) and use ${K.a} at a soil plot.`,
       intro:['Now for the garden. You carry two BLOODBERRY SEEDS in your satchel.',
         'The farm plots sit north-east of town, inside the little fence — the gap is on the south side.',
-        'FACE a dark soil plot, press A, and choose a seed. Press A again later to WATER it — water makes everything grow half again as fast.'],
+        `FACE a dark soil plot, use ${K.a}, and choose a seed. Use it again later to WATER the plot — water makes everything grow half again as fast.`],
       check: () => Object.keys(G.farm).length > 0 },
 
     { icon:'🌙', obj:'Go home to Hollow Manor (north door) and SLEEP in your bed.',
       intro:['Crops take time. Luckily, time is yours to spend.',
-        'Your manor is the big house at the TOP of town. Inside, face the bed and press A to sleep.',
+        `Your manor is the big house at the TOP of town. Inside, face the bed and use ${K.a} to sleep.`,
         'Sleeping heals everything, passes the day, and turns the MOON — new moon, waxing, full, waning. The moon decides what bites.'],
       check: () => !!G.flags.slept },
 
-    { icon:'⛏', obj:'Restore the KITCHEN: face the rubble in the west doorway and press A.',
+    { icon:'⛏', obj:`Restore the KITCHEN: face the rubble in the west doorway and use ${K.a}.`,
       gift: () => { G.gold += 800; Inv.add('plank', 3); Inv.add('stone', 2);
         UI.toast('Morwen slips you 800⛁, 3 planks and 2 stones.'); },
       intro:['This manor is your first home — and your training in the builder\'s art.',
-        'I have tucked some coin and materials into your satchel. Face the RUBBLE blocking the west doorway and press A to restore the KITCHEN.',
+        `I have tucked some coin and materials into your satchel. Face the RUBBLE blocking the west doorway and use ${K.a} to restore the KITCHEN.`,
         'Each restored wing grants a power. All four restored... and the valley\'s DEED BOOK opens. But one wing will do for now.'],
       check: () => !!G.manor.restored.kitchen },
 
@@ -72,21 +73,21 @@ const Tutorial = (() => {
       gift: () => { if (Inv.count('bloodberry') < 3) Inv.add('bloodberry', 3 - Inv.count('bloodberry'));
         UI.toast('Morwen tops up your bloodberries.'); },
       intro:['A kitchen! Now we cook. Well — BREW.',
-        'The cauldron bubbles in your new kitchen. Face it, press A, and brew a GRAVE TONIC from three bloodberries.',
+        `The cauldron bubbles in your new kitchen. Face it, use ${K.a}, and brew a GRAVE TONIC from three bloodberries.`,
         'Your farm grows the ingredients; your Brewing skill unlocks finer recipes — baits, elixirs, even Second Breath.'],
       check: () => (G.skills.brewing || 0) > 0 },
 
     { icon:'🕳', obj:'Descend into the catacombs (the dark hole in the graveyard) and reach floor B2.',
       intro:['You are ready for the dark, I think.',
-        'In the graveyard, west of town, a HOLE waits. Press A at its edge to climb down.',
+        `In the graveyard, west of town, a HOLE waits. Use ${K.a} at its edge to climb down.`,
         'Fight to the DOWN STAIRS and descend to floor B2. Chests hide gold and gear. The floors go down FOREVER — every fifth one is guarded.',
         'If it goes badly, use a GRAVE RUNE from your satchel to escape. The Gravedigger gives them to those who ask.'],
       check: () => (G.cata.maxFloor || 0) >= 2 },
 
-    { icon:'⚔', obj:'Equip a piece of gear from the GEAR menu (☰ → Gear).',
+    { icon:'⚔', obj:`Equip a piece of gear from the GEAR menu (${K.menu} → Gear).`,
       gift: () => { G.gear.bag.push(rollGear(3)); UI.toast('Morwen presses an old family heirloom into your hands.'); },
       intro:['The dead drop more than dust — staves, robes, charms, each with its own blessings.',
-        'I have given you a piece to start. Open ☰ → GEAR, pick it, and EQUIP it.',
+        `I have given you a piece to start. Open ${K.menu} → GEAR, pick it, and EQUIP it.`,
         'Common is white, CURSED is blue, ELDRITCH is gold with three blessings. Salvage what you do not want.'],
       check: () => !!(G.gear.equip.staff || G.gear.equip.robe || G.gear.equip.charm) },
 
